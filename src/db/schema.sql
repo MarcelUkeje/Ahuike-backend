@@ -1,6 +1,17 @@
 -- Ahuike hospital database schema
 -- Run once against your NeonDB database before starting the server.
 
+CREATE TABLE IF NOT EXISTS patients (
+  id            TEXT        PRIMARY KEY,
+  name          TEXT        NOT NULL,
+  email         TEXT        UNIQUE NOT NULL,
+  password_hash TEXT        NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_patients_email ON patients(email);
+
 CREATE TABLE IF NOT EXISTS departments (
   id          TEXT        PRIMARY KEY,
   name        TEXT        NOT NULL,
@@ -23,6 +34,8 @@ CREATE TABLE IF NOT EXISTS doctors (
   image_url        TEXT,
   rating           NUMERIC(3,2) NOT NULL DEFAULT 0,
   rating_count     INTEGER     NOT NULL DEFAULT 0,
+  -- consultation_fee stored in whole Naira (INTEGER). If kobo precision is ever
+  -- required, migrate this column to NUMERIC(12,2).
   consultation_fee INTEGER     NOT NULL DEFAULT 0,
   is_available     BOOLEAN     NOT NULL DEFAULT true,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),

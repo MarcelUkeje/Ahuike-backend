@@ -1,34 +1,48 @@
 /**
- * db:migrate — applies schema.sql then seed.sql against DATABASE_URL.
- * Requires Node.js 18+ (for native WebSocket) and DATABASE_URL to be set.
+ * db:migrate — applies schema.sql then seed.sql against DATABASE_URL via HTTP.
+ * Uses the NeonDB HTTP driver (no WebSocket) — compatible with both pooler and
+ * direct connection strings.
  * Usage: npm run db:migrate
  */
+import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Pool, neonConfig } from '@neondatabase/serverless';
+import { neon } from '@neondatabase/serverless';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
-const seed   = readFileSync(join(__dirname, 'seed.sql'), 'utf8');
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL environment variable is not set.');
 
-// Pool uses WebSocket; Node 22 ships with globalThis.WebSocket built-in.
-neonConfig.webSocketConstructor = (globalThis as Record<string, unknown>)['WebSocket'] as typeof WebSocket;
+const sql = neon(url);
 
-const pool = new Pool({ connectionString: url });
-
-try {
-  console.log('Applying schema…');
-  await pool.query(schema);
-
-  console.log('Applying seed data…');
-  await pool.query(seed);
-
-  console.log('Done ✓');
-} finally {
-  await pool.end();
+/**
+ * Build a TemplateStringsArray-compatible object from a plain string so the
+ * neon HTTP function can accept raw SQL without tagged-template syntax.
+ */
+function tsa(text: string): TemplateStringsArray {
+  return Object.assign([text], { raw: [text] }) as unknown as TemplateStringsArray;
 }
+
+/** Split a SQL file into individual executable statements. */
+function splitSql(content: string): string[] {
+  return content
+    .replace(/--[^\n]*/g, '')  // strip single-line comments
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+async function runFile(label: string, filePath: string): Promise<void> {
+  console.log(`${label}…`);
+  const statements = splitSql(readFileSync(filePath, 'utf8'));
+  for (const stmt of statements) {
+    await sql(tsa(stmt));
+  }
+}
+
+await runFile('Applying schema', join(__dirname, 'schema.sql'));
+await runFile('Applying seed data', join(__dirname, 'seed.sql'));
+
+console.log('Done ✓');

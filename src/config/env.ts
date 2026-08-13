@@ -9,6 +9,9 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('*'),
   // NeonDB — required in production, optional in test (in-memory adapters used)
   DATABASE_URL: z.string().min(1).optional(),
+  // JWT signing secret — generate with: openssl rand -hex 64
+  // Required in production; defaults to an insecure dev value when absent.
+  JWT_SECRET: z.string().min(32).default('dev-secret-please-replace-in-production-use-openssl-rand-hex-64'),
   // Upstash Redis — optional; caching is skipped gracefully when absent
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),

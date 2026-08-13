@@ -1,22 +1,40 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import jwt from '@fastify/jwt';
 import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import type { AppEnvironment } from './config/env.js';
 import { HttpError } from './lib/http-error.js';
-import { NeonAppointmentRepository, InMemoryAppointmentRepository, type AppointmentRepository } from './modules/appointments/appointment.repository.js';
+import {
+  NeonAppointmentRepository,
+  InMemoryAppointmentRepository,
+  type AppointmentRepository,
+} from './modules/appointments/appointment.repository.js';
 import { appointmentRoutes } from './modules/appointments/appointment.routes.js';
-import { NeonDepartmentRepository, InMemoryDepartmentRepository, type DepartmentRepository } from './modules/departments/department.repository.js';
+import {
+  NeonDepartmentRepository,
+  InMemoryDepartmentRepository,
+  type DepartmentRepository,
+} from './modules/departments/department.repository.js';
 import { departmentRoutes } from './modules/departments/department.routes.js';
-import { NeonDoctorRepository, InMemoryDoctorRepository, type DoctorRepository } from './modules/doctors/doctor.repository.js';
+import {
+  NeonDoctorRepository,
+  InMemoryDoctorRepository,
+  type DoctorRepository,
+} from './modules/doctors/doctor.repository.js';
 import { doctorRoutes } from './modules/doctors/doctor.routes.js';
-
-/** Use NeonDB repositories only when DATABASE_URL is configured. */
-const hasDb = Boolean(process.env.DATABASE_URL);
+import {
+  NeonPatientRepository,
+  InMemoryPatientRepository,
+  type PatientRepository,
+} from './modules/patients/patient.repository.js';
+import { authRoutes } from './modules/auth/auth.routes.js';
+import { patientRoutes } from './modules/patients/patient.routes.js';
 
 export interface AppDependencies {
-  departments?: DepartmentRepository;
-  doctors?: DoctorRepository;
+  departments?:  DepartmentRepository;
+  doctors?:      DoctorRepository;
   appointments?: AppointmentRepository;
+  patients?:     PatientRepository;
 }
 
 export async function buildApp(
@@ -35,6 +53,21 @@ export async function buildApp(
     origin: env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map((v) => v.trim()),
   });
 
+  // ── JWT ──────────────────────────────────────────────────────────────────────
+  await app.register(jwt, { secret: env.JWT_SECRET });
+
+  // Attach a reusable preHandler that all protected routes can reference
+  app.decorate('authenticate', async function (request: any, reply: any) {
+    try {
+      await request.jwtVerify();
+    } catch {
+      void reply.code(401).send({
+        error: { code: 'UNAUTHENTICATED', message: 'A valid authentication token is required.' },
+      });
+    }
+  });
+
+  // ── Health ────────────────────────────────────────────────────────────────────
   app.get('/health', async () => ({
     data: {
       service: 'ahuike-backend',
@@ -44,16 +77,23 @@ export async function buildApp(
     },
   }));
 
-  // Prefer injected dependencies (tests); use NeonDB when DATABASE_URL is set, in-memory otherwise
-  const deptRepo   = dependencies.departments  ?? (hasDb ? new NeonDepartmentRepository()  : new InMemoryDepartmentRepository());
-  const doctorRepo = dependencies.doctors      ?? (hasDb ? new NeonDoctorRepository()      : new InMemoryDoctorRepository());
-  const apptRepo   = dependencies.appointments ?? (hasDb ? new NeonAppointmentRepository() : new InMemoryAppointmentRepository());
+  // ── Repositories ──────────────────────────────────────────────────────────────
+  // Evaluate after env is validated — not at module import time
+  const hasDb = Boolean(env.DATABASE_URL);
 
-  await app.register(departmentRoutes(deptRepo),            { prefix: '/api/v1/departments' });
-  await app.register(doctorRoutes(doctorRepo),              { prefix: '/api/v1/doctors' });
-  // Appointments need the doctor repo to validate slots and fetch authoritative fees
-  await app.register(appointmentRoutes(apptRepo, doctorRepo), { prefix: '/api/v1/appointments' });
+  const deptRepo    = dependencies.departments  ?? (hasDb ? new NeonDepartmentRepository()  : new InMemoryDepartmentRepository());
+  const doctorRepo  = dependencies.doctors      ?? (hasDb ? new NeonDoctorRepository()      : new InMemoryDoctorRepository());
+  const apptRepo    = dependencies.appointments ?? (hasDb ? new NeonAppointmentRepository() : new InMemoryAppointmentRepository());
+  const patientRepo = dependencies.patients     ?? (hasDb ? new NeonPatientRepository()     : new InMemoryPatientRepository());
 
+  // ── Routes ────────────────────────────────────────────────────────────────────
+  await app.register(authRoutes(patientRepo),                      { prefix: '/api/v1/auth' });
+  await app.register(patientRoutes(patientRepo),                   { prefix: '/api/v1/patients' });
+  await app.register(departmentRoutes(deptRepo),                   { prefix: '/api/v1/departments' });
+  await app.register(doctorRoutes(doctorRepo),                     { prefix: '/api/v1/doctors' });
+  await app.register(appointmentRoutes(apptRepo, doctorRepo),      { prefix: '/api/v1/appointments' });
+
+  // ── Error handlers ────────────────────────────────────────────────────────────
   app.setNotFoundHandler((_request, reply) => {
     void reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Route not found.' } });
   });
