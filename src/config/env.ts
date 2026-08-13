@@ -7,7 +7,11 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   CORS_ORIGINS: z.string().default('*'),
-  DATABASE_URL: z.string().optional(),
+  // NeonDB — required in production, optional in test (in-memory adapters used)
+  DATABASE_URL: z.string().min(1).optional(),
+  // Upstash Redis — optional; caching is skipped gracefully when absent
+  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
 });
 
 export type AppEnvironment = z.infer<typeof envSchema>;
