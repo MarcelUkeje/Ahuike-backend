@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getDb } from '../../lib/db.js';
+import type { PaginatedResult, PaginationQuery } from '../../lib/pagination.js';
+import { PAGINATION_DEFAULTS } from '../../lib/pagination.js';
 import type { Appointment } from './appointment.model.js';
 
 export interface CreateAppointmentInput {
@@ -11,9 +13,13 @@ export interface CreateAppointmentInput {
   consultationFee: number;
 }
 
+export interface AppointmentListQuery extends PaginationQuery {
+  status?: Appointment['status'];
+}
+
 export interface AppointmentRepository {
   create(input: CreateAppointmentInput): Promise<Appointment>;
-  listForPatient(patientId: string): Promise<Appointment[]>;
+  listForPatient(patientId: string, query?: Partial<AppointmentListQuery>): Promise<PaginatedResult<Appointment>>;
   findById(id: string): Promise<Appointment | null>;
 }
 
@@ -55,16 +61,49 @@ export class NeonAppointmentRepository implements AppointmentRepository {
     };
   }
 
-  async listForPatient(patientId: string): Promise<Appointment[]> {
+  async listForPatient(
+    patientId: string,
+    query: Partial<AppointmentListQuery> = {},
+  ): Promise<PaginatedResult<Appointment>> {
     const sql = getDb();
+    const limit  = Math.min(query.limit ?? PAGINATION_DEFAULTS.limit, PAGINATION_DEFAULTS.maxLimit);
+    const offset = query.offset ?? PAGINATION_DEFAULTS.offset;
+    const { status } = query;
+
+    if (status) {
+      const countRows = (await sql`
+        SELECT COUNT(*) AS total FROM appointments
+        WHERE patient_id = ${patientId} AND status = ${status}
+      `) as { total: string }[];
+      const total = Number(countRows[0]!.total);
+
+      const rows = (await sql`
+        SELECT id, patient_id, doctor_id, department_id, slot_id,
+               reason_for_visit, consultation_fee, status, notes, created_at, updated_at
+        FROM appointments
+        WHERE patient_id = ${patientId} AND status = ${status}
+        ORDER BY created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `) as Record<string, unknown>[];
+
+      return buildResult(rows.map(toAppointment), total, limit, offset);
+    }
+
+    const countRows = (await sql`
+      SELECT COUNT(*) AS total FROM appointments WHERE patient_id = ${patientId}
+    `) as { total: string }[];
+    const total = Number(countRows[0]!.total);
+
     const rows = (await sql`
       SELECT id, patient_id, doctor_id, department_id, slot_id,
              reason_for_visit, consultation_fee, status, notes, created_at, updated_at
       FROM appointments
       WHERE patient_id = ${patientId}
       ORDER BY created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
     `) as Record<string, unknown>[];
-    return rows.map(toAppointment);
+
+    return buildResult(rows.map(toAppointment), total, limit, offset);
   }
 
   async findById(id: string): Promise<Appointment | null> {
@@ -98,10 +137,20 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
     return appointment;
   }
 
-  async listForPatient(patientId: string): Promise<Appointment[]> {
-    return [...this.store.values()]
-      .filter((a) => a.patientId === patientId)
+  async listForPatient(
+    patientId: string,
+    query: Partial<AppointmentListQuery> = {},
+  ): Promise<PaginatedResult<Appointment>> {
+    const limit  = Math.min(query.limit ?? PAGINATION_DEFAULTS.limit, PAGINATION_DEFAULTS.maxLimit);
+    const offset = query.offset ?? PAGINATION_DEFAULTS.offset;
+    const { status } = query;
+
+    const all = [...this.store.values()]
+      .filter((a) => a.patientId === patientId && (!status || a.status === status))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    const page = all.slice(offset, offset + limit);
+    return buildResult(page, all.length, limit, offset);
   }
 
   async findById(id: string): Promise<Appointment | null> {
@@ -110,6 +159,10 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function buildResult<T>(items: T[], total: number, limit: number, offset: number): PaginatedResult<T> {
+  return { items, meta: { total, limit, offset, hasMore: offset + items.length < total } };
+}
 
 function toAppointment(row: Record<string, unknown>): Appointment {
   return {

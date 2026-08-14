@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { HttpError } from '../../lib/http-error.js';
+import { PAGINATION_DEFAULTS } from '../../lib/pagination.js';
 import { parseInput } from '../../lib/validation.js';
 import type { AppointmentRepository } from './appointment.repository.js';
 import type { DoctorRepository } from '../doctors/doctor.repository.js';
@@ -12,6 +13,12 @@ const createAppointmentSchema = z.object({
   reasonForVisit: z.string().trim().min(3).max(500),
 });
 
+const listQuerySchema = z.object({
+  status: z.enum(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']).optional(),
+  limit:  z.coerce.number().int().min(1).max(PAGINATION_DEFAULTS.maxLimit).default(PAGINATION_DEFAULTS.limit),
+  offset: z.coerce.number().int().min(0).default(PAGINATION_DEFAULTS.offset),
+});
+
 export function appointmentRoutes(
   appointmentRepo: AppointmentRepository,
   doctors: DoctorRepository,
@@ -20,17 +27,23 @@ export function appointmentRoutes(
     // All appointment routes require a valid JWT
     app.addHook('preHandler', app.authenticate);
 
-    // GET /api/v1/appointments
+    // GET /api/v1/appointments[?status=&limit=&offset=]
     app.get('/', async (request) => {
       const patientId = request.user.sub;
-      return { data: await appointmentRepo.listForPatient(patientId) };
+      const query = parseInput(listQuerySchema, request.query);
+      const { status, ...page } = query;
+      const result = await appointmentRepo.listForPatient(
+        patientId,
+        status !== undefined ? { status, ...page } : page,
+      );
+      return { data: result.items, meta: result.meta };
     });
 
     // GET /api/v1/appointments/:appointmentId
     app.get('/:appointmentId', async (request) => {
       const patientId = request.user.sub;
       const { appointmentId } = parseInput(
-        z.object({ appointmentId: z.uuid() }),
+        z.object({ appointmentId: z.string().uuid() }),
         request.params,
       );
       const appointment = await appointmentRepo.findById(appointmentId);
