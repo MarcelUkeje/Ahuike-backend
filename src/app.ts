@@ -29,12 +29,26 @@ import {
 } from './modules/patients/patient.repository.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { patientRoutes } from './modules/patients/patient.routes.js';
+import {
+  NeonMedicalRecordRepository,
+  InMemoryMedicalRecordRepository,
+  type MedicalRecordRepository,
+} from './modules/medical_records/medical_record.repository.js';
+import { medicalRecordRoutes } from './modules/medical_records/medical_record.routes.js';
+import {
+  NeonPrescriptionRepository,
+  InMemoryPrescriptionRepository,
+  type PrescriptionRepository,
+} from './modules/prescriptions/prescription.repository.js';
+import { prescriptionRoutes } from './modules/prescriptions/prescription.routes.js';
 
 export interface AppDependencies {
-  departments?:  DepartmentRepository;
-  doctors?:      DoctorRepository;
-  appointments?: AppointmentRepository;
-  patients?:     PatientRepository;
+  departments?:    DepartmentRepository;
+  doctors?:        DoctorRepository;
+  appointments?:   AppointmentRepository;
+  patients?:       PatientRepository;
+  medicalRecords?: MedicalRecordRepository;
+  prescriptions?:  PrescriptionRepository;
 }
 
 export async function buildApp(
@@ -85,6 +99,8 @@ export async function buildApp(
   const doctorRepo  = dependencies.doctors      ?? (hasDb ? new NeonDoctorRepository()      : new InMemoryDoctorRepository());
   const apptRepo    = dependencies.appointments ?? (hasDb ? new NeonAppointmentRepository() : new InMemoryAppointmentRepository());
   const patientRepo = dependencies.patients     ?? (hasDb ? new NeonPatientRepository()     : new InMemoryPatientRepository());
+  const mrRepo      = dependencies.medicalRecords ?? (hasDb ? new NeonMedicalRecordRepository() : new InMemoryMedicalRecordRepository());
+  const rxRepo      = dependencies.prescriptions  ?? (hasDb ? new NeonPrescriptionRepository()  : new InMemoryPrescriptionRepository());
 
   // ── Routes ────────────────────────────────────────────────────────────────────
   await app.register(authRoutes(patientRepo),                      { prefix: '/api/v1/auth' });
@@ -92,6 +108,8 @@ export async function buildApp(
   await app.register(departmentRoutes(deptRepo),                   { prefix: '/api/v1/departments' });
   await app.register(doctorRoutes(doctorRepo),                     { prefix: '/api/v1/doctors' });
   await app.register(appointmentRoutes(apptRepo, doctorRepo),      { prefix: '/api/v1/appointments' });
+  await app.register(medicalRecordRoutes(mrRepo),                  { prefix: '/api/v1/medical-records' });
+  await app.register(prescriptionRoutes(rxRepo),                   { prefix: '/api/v1/prescriptions' });
 
   // ── Error handlers ────────────────────────────────────────────────────────────
   app.setNotFoundHandler((_request, reply) => {
