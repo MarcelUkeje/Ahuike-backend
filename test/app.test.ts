@@ -11,7 +11,7 @@ const testEnv: AppEnvironment = {
   CORS_ORIGINS: '*',
 };
 
-describe('NdiChow API', () => {
+describe('Ahuike API', () => {
   let app: FastifyInstance | undefined;
   afterEach(async () => app?.close());
 
