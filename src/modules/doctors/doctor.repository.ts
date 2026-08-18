@@ -33,11 +33,15 @@ export class NeonDoctorRepository implements DoctorRepository {
       const total = Number(countRows[0]!.total);
 
       const rows = (await sql`
-        SELECT id, name, slug, specialty, department_id, image_url,
-               rating, rating_count, consultation_fee, is_available
-        FROM doctors
-        WHERE department_id = ${departmentId}
-        ORDER BY name
+        SELECT d.id, d.name, d.slug, d.specialty, d.department_id, d.image_url,
+               d.rating, d.rating_count, d.consultation_fee,
+               EXISTS (
+                 SELECT 1 FROM appointment_slots s 
+                 WHERE s.doctor_id = d.id AND s.slot_date >= CURRENT_DATE AND s.is_booked = false
+               ) AS is_available
+        FROM doctors d
+        WHERE d.department_id = ${departmentId}
+        ORDER BY d.name
         LIMIT ${limit} OFFSET ${offset}
       `) as Record<string, unknown>[];
 
@@ -48,10 +52,14 @@ export class NeonDoctorRepository implements DoctorRepository {
     const total = Number(countRows[0]!.total);
 
     const rows = (await sql`
-      SELECT id, name, slug, specialty, department_id, image_url,
-             rating, rating_count, consultation_fee, is_available
-      FROM doctors
-      ORDER BY name
+      SELECT d.id, d.name, d.slug, d.specialty, d.department_id, d.image_url,
+             d.rating, d.rating_count, d.consultation_fee,
+             EXISTS (
+               SELECT 1 FROM appointment_slots s 
+               WHERE s.doctor_id = d.id AND s.slot_date >= CURRENT_DATE AND s.is_booked = false
+             ) AS is_available
+      FROM doctors d
+      ORDER BY d.name
       LIMIT ${limit} OFFSET ${offset}
     `) as Record<string, unknown>[];
 
@@ -69,12 +77,51 @@ export class NeonDoctorRepository implements DoctorRepository {
     if (rows.length === 0) return null;
     const doc = rows[0]!;
 
-    const slots = (await sql`
+    let slots = (await sql`
       SELECT id, doctor_id, slot_date, start_time, end_time, is_booked
       FROM appointment_slots
       WHERE doctor_id = ${id} AND slot_date >= CURRENT_DATE AND is_booked = false
       ORDER BY slot_date, start_time
     `) as Record<string, unknown>[];
+
+    // MVP Auto-slot generator
+    if (slots.length < 10) {
+      const needed = 10 - slots.length;
+      const newSlots: Record<string, unknown>[] = [];
+      let currentGenDate = new Date();
+      currentGenDate.setDate(currentGenDate.getDate() + 1); // Start from tomorrow
+      let added = 0;
+      
+      while(added < needed) {
+        const slotDate = currentGenDate.toISOString().substring(0, 10);
+        const times = ['09:00', '11:00', '14:00', '16:00'];
+        for (const t of times) {
+          if (added >= needed) break;
+          const endT = t.replace(':00', ':30');
+          const slotId = `slot-${id}-${Date.now()}-${added}`;
+          
+          try {
+             const inserted = await sql`
+               INSERT INTO appointment_slots (id, doctor_id, slot_date, start_time, end_time, is_booked)
+               VALUES (${slotId}, ${id}, ${slotDate}, ${t}, ${endT}, false)
+               ON CONFLICT DO NOTHING
+               RETURNING id, doctor_id, slot_date, start_time, end_time, is_booked
+             ` as Record<string, unknown>[];
+             if (inserted.length > 0) {
+               newSlots.push(inserted[0]!);
+               added++;
+             }
+          } catch(e) {
+             // Ignore
+          }
+        }
+        currentGenDate.setDate(currentGenDate.getDate() + 1);
+      }
+      
+      slots = [...slots, ...newSlots].sort((a, b) => 
+        `${a['slot_date']}${a['start_time']}`.localeCompare(`${b['slot_date']}${b['start_time']}`)
+      );
+    }
 
     return {
       ...toDoctorSummary(doc),
