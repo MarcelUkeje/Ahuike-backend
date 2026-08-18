@@ -55,15 +55,10 @@ export function doctorRoutes(repository: DoctorRepository): FastifyPluginAsync {
         z.object({ doctorId: z.string().min(1) }),
         request.params,
       );
-      const cacheKey = `doctors:detail:${doctorId}`;
-      const cached = await cacheGet(cacheKey);
-      if (cached) return { data: cached };
 
       const doctor = await repository.findById(doctorId);
       if (!doctor) throw new HttpError(404, 'DOCTOR_NOT_FOUND', 'Doctor not found.');
-      // Cache summary without slots (slots change on every booking)
-      const { availableSlots: _slots, ...summary } = doctor;
-      await cacheSet(cacheKey, summary, CACHE_TTL);
+      
       return { data: doctor };
     });
   };
