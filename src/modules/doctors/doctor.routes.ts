@@ -30,6 +30,25 @@ export function doctorRoutes(repository: DoctorRepository): FastifyPluginAsync {
       return response;
     });
 
+    // POST /api/v1/doctors
+    app.post('/', async (request) => {
+      const adminPass = request.headers['x-admin-password'];
+      if (adminPass !== 'admin123') throw new HttpError(401, 'UNAUTHORIZED', 'Admin access required.');
+
+      const bodySchema = z.object({
+        name: z.string().min(1),
+        specialty: z.string().min(1),
+        departmentId: z.string().min(1),
+        bio: z.string().min(1),
+        qualifications: z.array(z.string()).min(1),
+        consultationFee: z.number().int().min(0),
+      });
+
+      const input = parseInput(bodySchema, request.body);
+      const doctor = await repository.create(input);
+      return { data: doctor };
+    });
+
     // GET /api/v1/doctors/:doctorId
     app.get('/:doctorId', async (request) => {
       const { doctorId } = parseInput(

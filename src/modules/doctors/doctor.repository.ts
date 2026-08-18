@@ -10,6 +10,7 @@ export interface DoctorListQuery extends PaginationQuery {
 export interface DoctorRepository {
   list(query?: Partial<DoctorListQuery>): Promise<PaginatedResult<DoctorSummary>>;
   findById(id: string): Promise<Doctor | null>;
+  create(data: { name: string; specialty: string; departmentId: string; bio: string; qualifications: string[]; consultationFee: number }): Promise<DoctorSummary>;
   /** Atomically claim a slot only if it is unbooked and not in the past. */
   atomicClaimSlot(slotId: string): Promise<AppointmentSlot | null>;
   /** Compensating rollback: release a slot whose appointment creation subsequently failed. */
@@ -81,6 +82,20 @@ export class NeonDoctorRepository implements DoctorRepository {
       qualifications: doc['qualifications'] as string[],
       availableSlots: slots.map(toSlot),
     };
+  }
+
+  async create(data: { name: string; specialty: string; departmentId: string; bio: string; qualifications: string[]; consultationFee: number }): Promise<DoctorSummary> {
+    const sql = getDb();
+    const id = `dr-${Date.now()}`;
+    const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now();
+    
+    const rows = (await sql`
+      INSERT INTO doctors (id, name, slug, specialty, department_id, bio, qualifications, consultation_fee)
+      VALUES (${id}, ${data.name}, ${slug}, ${data.specialty}, ${data.departmentId}, ${data.bio}, ${data.qualifications}, ${data.consultationFee})
+      RETURNING id, name, slug, specialty, department_id, image_url, rating, rating_count, consultation_fee, is_available
+    `) as Record<string, unknown>[];
+    
+    return toDoctorSummary(rows[0]!);
   }
 
   async atomicClaimSlot(slotId: string): Promise<AppointmentSlot | null> {
@@ -165,6 +180,19 @@ export class InMemoryDoctorRepository implements DoctorRepository {
       .filter((s) => s.doctorId === id && !s.isBooked)
       .sort((a, b) => `${a.slotDate}${a.startTime}`.localeCompare(`${b.slotDate}${b.startTime}`));
     return { ...doctor, availableSlots };
+  }
+
+  async create(data: { name: string; specialty: string; departmentId: string; bio: string; qualifications: string[]; consultationFee: number }): Promise<DoctorSummary> {
+    const id = `dr-${Date.now()}`;
+    const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now();
+    const doc: Doctor = {
+      id, name: data.name, slug, specialty: data.specialty, departmentId: data.departmentId,
+      bio: data.bio, qualifications: data.qualifications, consultationFee: data.consultationFee,
+      imageUrl: null, rating: 0, ratingCount: 0, isAvailable: true, availableSlots: []
+    };
+    seedDoctors.push(doc);
+    const { bio: _b, qualifications: _q, availableSlots: _s, ...summary } = doc;
+    return summary;
   }
 
   async atomicClaimSlot(slotId: string): Promise<AppointmentSlot | null> {
