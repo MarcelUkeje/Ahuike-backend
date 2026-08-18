@@ -102,5 +102,22 @@ export function appointmentRoutes(
         throw err;
       }
     });
+
+    // POST /api/v1/appointments/:appointmentId/confirm
+    app.post('/:appointmentId/confirm', async (request, reply) => {
+      const patientId = request.user.sub;
+      const { appointmentId } = parseInput(
+        z.object({ appointmentId: z.string().uuid() }),
+        request.params,
+      );
+
+      const appointment = await appointmentRepo.findById(appointmentId);
+      if (!appointment || appointment.patientId !== patientId) {
+        throw new HttpError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
+      }
+
+      await appointmentRepo.confirmPayment(appointmentId);
+      return reply.code(200).send({ data: { status: 'confirmed' } });
+    });
   };
 }

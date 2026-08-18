@@ -21,6 +21,7 @@ export interface AppointmentRepository {
   create(input: CreateAppointmentInput): Promise<Appointment>;
   listForPatient(patientId: string, query?: Partial<AppointmentListQuery>): Promise<PaginatedResult<Appointment>>;
   findById(id: string): Promise<Appointment | null>;
+  confirmPayment(id: string): Promise<void>;
 }
 
 // ─── NeonDB implementation ────────────────────────────────────────────────────
@@ -116,6 +117,13 @@ export class NeonAppointmentRepository implements AppointmentRepository {
     `) as Record<string, unknown>[];
     return rows.length === 0 ? null : toAppointment(rows[0]!);
   }
+
+  async confirmPayment(id: string): Promise<void> {
+    const sql = getDb();
+    const now = new Date().toISOString();
+    await sql`UPDATE appointments SET status = 'confirmed', updated_at = ${now} WHERE id = ${id}`;
+    await sql`INSERT INTO appointment_status_events (id, appointment_id, status, created_at) VALUES (${randomUUID()}, ${id}, 'confirmed', ${now})`;
+  }
 }
 
 // ─── In-memory implementation (tests) ────────────────────────────────────────
@@ -155,6 +163,15 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
 
   async findById(id: string): Promise<Appointment | null> {
     return this.store.get(id) ?? null;
+  }
+
+  async confirmPayment(id: string): Promise<void> {
+    const appointment = this.store.get(id);
+    if (appointment) {
+      appointment.status = 'confirmed';
+      appointment.updatedAt = new Date().toISOString();
+      this.store.set(id, appointment);
+    }
   }
 }
 
