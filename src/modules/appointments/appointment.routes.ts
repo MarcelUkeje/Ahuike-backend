@@ -119,5 +119,22 @@ export function appointmentRoutes(
       await appointmentRepo.confirmPayment(appointmentId);
       return reply.code(200).send({ data: { status: 'confirmed' } });
     });
+
+    // DELETE /api/v1/appointments/:appointmentId
+    app.delete('/:appointmentId', async (request, reply) => {
+      const patientId = request.user.sub;
+      const { appointmentId } = parseInput(
+        z.object({ appointmentId: z.string().uuid() }),
+        request.params,
+      );
+
+      const appointment = await appointmentRepo.findById(appointmentId);
+      if (!appointment || appointment.patientId !== patientId) {
+        throw new HttpError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
+      }
+
+      await appointmentRepo.delete(appointmentId);
+      return reply.code(204).send();
+    });
   };
 }

@@ -22,6 +22,7 @@ export interface AppointmentRepository {
   listForPatient(patientId: string, query?: Partial<AppointmentListQuery>): Promise<PaginatedResult<Appointment>>;
   findById(id: string): Promise<Appointment | null>;
   confirmPayment(id: string): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 // ─── NeonDB implementation ────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ export class NeonAppointmentRepository implements AppointmentRepository {
     query: Partial<AppointmentListQuery> = {},
   ): Promise<PaginatedResult<Appointment>> {
     const sql = getDb();
-    const limit  = Math.min(query.limit ?? PAGINATION_DEFAULTS.limit, PAGINATION_DEFAULTS.maxLimit);
+    const limit = Math.min(query.limit ?? PAGINATION_DEFAULTS.limit, PAGINATION_DEFAULTS.maxLimit);
     const offset = query.offset ?? PAGINATION_DEFAULTS.offset;
     const { status } = query;
 
@@ -124,6 +125,12 @@ export class NeonAppointmentRepository implements AppointmentRepository {
     await sql`UPDATE appointments SET status = 'confirmed', updated_at = ${now} WHERE id = ${id}`;
     await sql`INSERT INTO appointment_status_events (id, appointment_id, status, created_at) VALUES (${randomUUID()}, ${id}, 'confirmed', ${now})`;
   }
+
+  async delete(id: string): Promise<void> {
+    const sql = getDb();
+    await sql`DELETE FROM appointment_status_events WHERE appointment_id = ${id}`;
+    await sql`DELETE FROM appointments WHERE id = ${id}`;
+  }
 }
 
 // ─── In-memory implementation (tests) ────────────────────────────────────────
@@ -149,7 +156,7 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
     patientId: string,
     query: Partial<AppointmentListQuery> = {},
   ): Promise<PaginatedResult<Appointment>> {
-    const limit  = Math.min(query.limit ?? PAGINATION_DEFAULTS.limit, PAGINATION_DEFAULTS.maxLimit);
+    const limit = Math.min(query.limit ?? PAGINATION_DEFAULTS.limit, PAGINATION_DEFAULTS.maxLimit);
     const offset = query.offset ?? PAGINATION_DEFAULTS.offset;
     const { status } = query;
 
@@ -173,6 +180,10 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
       this.store.set(id, appointment);
     }
   }
+
+  async delete(id: string): Promise<void> {
+    this.store.delete(id);
+  }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -192,7 +203,7 @@ function toAppointment(row: Record<string, unknown>): Appointment {
     consultationFee: row['consultation_fee'] as number,
     status: row['status'] as Appointment['status'],
     notes: (row['notes'] as string | null | undefined) ?? null,
-    createdAt: String(row['created_at']),
-    updatedAt: String(row['updated_at']),
+    createdAt: row['created_at'] instanceof Date ? row['created_at'].toISOString() : String(row['created_at']),
+    updatedAt: row['updated_at'] instanceof Date ? row['updated_at'].toISOString() : String(row['updated_at']),
   };
 }
