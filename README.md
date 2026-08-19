@@ -239,6 +239,32 @@ GET /api/v1/appointments/:appointmentId
 X-Patient-Id: development-patient-id
 ```
 
+### Confirm an appointment
+
+```http
+POST /api/v1/appointments/:appointmentId/confirm
+```
+
+### Complete/Cancel an appointment
+
+```http
+DELETE /api/v1/appointments/:appointmentId
+```
+
+### Patient profile
+
+```http
+GET /api/v1/patients/me
+```
+
+### Add a new doctor (Admin)
+
+```http
+POST /api/v1/doctors
+Content-Type: application/json
+x-admin-password: your-admin-password
+```
+
 ### Book an appointment
 
 ```http
