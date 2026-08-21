@@ -17,6 +17,8 @@ const envSchema = z.object({
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   // Paystack — secret key for server-side payment operations
   PAYSTACK_SECRET_KEY: z.string().min(1),
+  // Resend — API key for transactional emails
+  RESEND_API_KEY: z.string().min(1),
 });
 
 export type AppEnvironment = z.infer<typeof envSchema>;

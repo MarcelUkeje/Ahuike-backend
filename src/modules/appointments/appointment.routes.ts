@@ -5,6 +5,8 @@ import { PAGINATION_DEFAULTS } from '../../lib/pagination.js';
 import { parseInput } from '../../lib/validation.js';
 import type { AppointmentRepository } from './appointment.repository.js';
 import type { DoctorRepository } from '../doctors/doctor.repository.js';
+import { getDb } from '../../lib/db.js';
+import { sendAppointmentConfirmationEmail } from '../emails/email.service.js';
 
 const createAppointmentSchema = z.object({
   doctorId:       z.string().min(1),
@@ -117,8 +119,53 @@ export function appointmentRoutes(
       }
 
       await appointmentRepo.confirmPayment(appointmentId);
+
+      const dbUrl = process.env.DATABASE_URL;
+      const resendApiKey = process.env.RESEND_API_KEY;
+
+      if (dbUrl && resendApiKey && resendApiKey !== 're_REPLACE_WITH_YOUR_RESEND_API_KEY') {
+        // Run email delivery asynchronously in the background so it does not block the response
+        (async () => {
+          try {
+            const sql = getDb();
+            const rows = (await sql`
+              SELECT 
+                p.name AS patient_name,
+                p.email AS patient_email,
+                d.name AS doctor_name,
+                d.specialty,
+                s.slot_date,
+                s.start_time
+              FROM appointments a
+              JOIN patients p ON a.patient_id = p.id
+              JOIN doctors d ON a.doctor_id = d.id
+              JOIN appointment_slots s ON a.slot_id = s.id
+              WHERE a.id = ${appointmentId}
+            `) as Record<string, unknown>[];
+
+            if (rows.length > 0) {
+              const row = rows[0]!;
+              await sendAppointmentConfirmationEmail(resendApiKey, {
+                to: row.patient_email as string,
+                patientName: row.patient_name as string,
+                doctorName: row.doctor_name as string,
+                specialty: row.specialty as string,
+                slotDate: String(row.slot_date).substring(0, 10),
+                slotTime: String(row.start_time).substring(0, 5),
+                consultationFee: appointment.consultationFee,
+                reasonForVisit: appointment.reasonForVisit,
+              });
+              request.log.info(`Appointment confirmation email sent to ${row.patient_email}`);
+            }
+          } catch (emailErr) {
+            request.log.error(emailErr, `Failed to send appointment confirmation email for ${appointmentId}`);
+          }
+        })();
+      }
+
       return reply.code(200).send({ data: { status: 'confirmed' } });
     });
+
 
     // DELETE /api/v1/appointments/:appointmentId
     app.delete('/:appointmentId', async (request, reply) => {
