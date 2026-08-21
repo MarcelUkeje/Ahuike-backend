@@ -5,6 +5,7 @@ import { HttpError } from '../../lib/http-error.js';
 import { PAGINATION_DEFAULTS } from '../../lib/pagination.js';
 import { parseInput } from '../../lib/validation.js';
 import type { DoctorRepository } from './doctor.repository.js';
+import { getDb } from '../../lib/db.js';
 
 const CACHE_TTL = 300; // 5 minutes
 
@@ -48,6 +49,13 @@ export function doctorRoutes(repository: DoctorRepository): FastifyPluginAsync {
       const input = parseInput(bodySchema, request.body);
       const doctor = await repository.create(input);
       return { data: doctor };
+    });
+
+    // TEMPORARY: Endpoint to update Dr. Nwosu fee to 100 on NeonDB
+    app.get('/debug-update-nwosu-fee', async (request, reply) => {
+      const sql = getDb();
+      await sql`UPDATE doctors SET consultation_fee = 100 WHERE id = 'dr-emeka-nwosu'`;
+      return { status: 'success', message: 'Dr. Nwosu fee updated to 100 in database!' };
     });
 
     // GET /api/v1/doctors/:doctorId
