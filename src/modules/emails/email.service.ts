@@ -73,7 +73,7 @@ export async function sendAppointmentConfirmationEmail(
     }),
   });
 
-  const statusCode = response.statusCode ?? response.status;
+  const statusCode = response.status;
   console.log(`[EmailService] Resend API responded with status: ${statusCode}`);
   const body = (await response.json()) as any;
   console.log(`[EmailService] Resend API response body:`, JSON.stringify(body, null, 2));
