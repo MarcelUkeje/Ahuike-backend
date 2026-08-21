@@ -5,7 +5,6 @@ import { HttpError } from '../../lib/http-error.js';
 import { PAGINATION_DEFAULTS } from '../../lib/pagination.js';
 import { parseInput } from '../../lib/validation.js';
 import type { DoctorRepository } from './doctor.repository.js';
-import { getDb } from '../../lib/db.js';
 
 const CACHE_TTL = 300; // 5 minutes
 
@@ -49,15 +48,6 @@ export function doctorRoutes(repository: DoctorRepository): FastifyPluginAsync {
       const input = parseInput(bodySchema, request.body);
       const doctor = await repository.create(input);
       return { data: doctor };
-    });
-
-    // TEMPORARY: Endpoint to update doctor image paths in NeonDB
-    app.get('/debug-update-doctor-images', async (request, reply) => {
-      const sql = getDb();
-      await sql`UPDATE doctors SET image_url = 'assets/images/dr_obi.jpeg' WHERE id = 'dr-amaka-obi'`;
-      await sql`UPDATE doctors SET image_url = 'assets/images/dr_nwosu.jpeg' WHERE id = 'dr-emeka-nwosu'`;
-      await sql`UPDATE doctors SET image_url = 'assets/images/dr_chioma.jpeg' WHERE id = 'dr-chioma-eze'`;
-      return { status: 'success', message: 'Doctor image paths updated!' };
     });
 
     // GET /api/v1/doctors/:doctorId
