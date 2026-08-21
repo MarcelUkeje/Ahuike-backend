@@ -42,6 +42,7 @@ export function doctorRoutes(repository: DoctorRepository): FastifyPluginAsync {
         bio: z.string().min(1),
         qualifications: z.array(z.string()).min(1),
         consultationFee: z.number().int().min(0),
+        imageUrl: z.string().optional(),
       });
 
       const input = parseInput(bodySchema, request.body);
