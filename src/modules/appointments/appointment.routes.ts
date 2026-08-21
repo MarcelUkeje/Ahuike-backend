@@ -123,9 +123,13 @@ export function appointmentRoutes(
       const dbUrl = process.env.DATABASE_URL;
       const resendApiKey = process.env.RESEND_API_KEY;
 
+      console.log(`[ConfirmAppointment] Payment confirmed for: ${appointmentId}`);
+      console.log(`[ConfirmAppointment] Env check: dbUrl=${!!dbUrl}, resendApiKey=${!!resendApiKey}`);
+
       if (dbUrl && resendApiKey && resendApiKey !== 're_REPLACE_WITH_YOUR_RESEND_API_KEY') {
         // Run email delivery asynchronously in the background so it does not block the response
         (async () => {
+
           try {
             const sql = getDb();
             const rows = (await sql`
