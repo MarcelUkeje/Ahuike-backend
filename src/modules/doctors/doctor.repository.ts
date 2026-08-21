@@ -178,7 +178,7 @@ const seedDoctors: Doctor[] = [
   {
     id: 'dr-emeka-nwosu', name: 'Dr. Emeka Nwosu', slug: 'dr-emeka-nwosu',
     specialty: 'Cardiologist', departmentId: 'dept-cardiology',
-    imageUrl: null, rating: 4.9, ratingCount: 187, consultationFee: 25000, isAvailable: true,
+    imageUrl: null, rating: 4.9, ratingCount: 187, consultationFee: 100, isAvailable: true,
     bio: 'Dr. Emeka Nwosu specialises in interventional cardiology.',
     qualifications: ['MBBS (UNILAG)', 'FMCP (Cardiology)'],
     availableSlots: [],

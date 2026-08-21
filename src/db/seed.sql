@@ -23,7 +23,7 @@ VALUES
     'Cardiologist', 'dept-cardiology',
     'Dr. Emeka Nwosu specialises in interventional cardiology and cardiac rehabilitation.',
     ARRAY['MBBS (UNILAG)', 'FMCP (Cardiology)', 'Fellowship — Lagos Heart Institute'],
-    4.90, 187, 25000, true
+    4.90, 187, 100, true
   ),
   (
     'dr-chioma-eze', 'Dr. Chioma Eze', 'dr-chioma-eze',
@@ -32,7 +32,14 @@ VALUES
     ARRAY['MBBS (UNIBEN)', 'FMCP (Paediatrics)'],
     4.75, 423, 18000, true
   )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  consultation_fee = EXCLUDED.consultation_fee,
+  specialty = EXCLUDED.specialty,
+  bio = EXCLUDED.bio,
+  qualifications = EXCLUDED.qualifications,
+  rating = EXCLUDED.rating,
+  rating_count = EXCLUDED.rating_count,
+  is_available = EXCLUDED.is_available;
 
 -- Appointment slots for the next 3 working days (relative dates)
 INSERT INTO appointment_slots (id, doctor_id, slot_date, start_time, end_time, is_booked) VALUES
