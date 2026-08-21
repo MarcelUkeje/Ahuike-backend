@@ -9,6 +9,8 @@ const testEnv: AppEnvironment = {
   PORT: 4000,
   LOG_LEVEL: 'silent',
   CORS_ORIGINS: '*',
+  JWT_SECRET: 'test-secret-at-least-32-characters-long-for-test-use-only',
+  PAYSTACK_SECRET_KEY: 'sk_test_dummy_key_for_unit_tests_only',
 };
 
 describe('Ahuike API', () => {

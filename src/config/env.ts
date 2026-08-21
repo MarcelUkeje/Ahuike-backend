@@ -15,6 +15,8 @@ const envSchema = z.object({
   // Upstash Redis — optional; caching is skipped gracefully when absent
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
+  // Paystack — secret key for server-side payment operations
+  PAYSTACK_SECRET_KEY: z.string().min(1),
 });
 
 export type AppEnvironment = z.infer<typeof envSchema>;

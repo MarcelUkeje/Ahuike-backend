@@ -41,6 +41,7 @@ import {
   type PrescriptionRepository,
 } from './modules/prescriptions/prescription.repository.js';
 import { prescriptionRoutes } from './modules/prescriptions/prescription.routes.js';
+import { paymentRoutes } from './modules/payments/payment.routes.js';
 
 export interface AppDependencies {
   departments?:    DepartmentRepository;
@@ -110,6 +111,7 @@ export async function buildApp(
   await app.register(appointmentRoutes(apptRepo, doctorRepo),      { prefix: '/api/v1/appointments' });
   await app.register(medicalRecordRoutes(mrRepo),                  { prefix: '/api/v1/medical-records' });
   await app.register(prescriptionRoutes(rxRepo),                   { prefix: '/api/v1/prescriptions' });
+  await app.register(paymentRoutes(env),                           { prefix: '/api/v1/payments' });
 
   // ── Error handlers ────────────────────────────────────────────────────────────
   app.setNotFoundHandler((_request, reply) => {
