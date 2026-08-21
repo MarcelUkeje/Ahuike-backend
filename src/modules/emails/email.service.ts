@@ -22,6 +22,9 @@ export async function sendAppointmentConfirmationEmail(
     minimumFractionDigits: 0,
   }).format(input.consultationFee);
 
+  console.log(`[EmailService] Attempting to send confirmation email to: ${input.to}`);
+  console.log(`[EmailService] Payload: Doctor = ${input.doctorName}, Fee = ${formattedFee}, Slot = ${input.slotDate} ${input.slotTime}`);
+
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -62,7 +65,7 @@ export async function sendAppointmentConfirmationEmail(
           </table>
           
           <p style="margin-top: 30px;">If you need to reschedule or cancel, please do so at least 24 hours before the appointment time.</p>
-          <p>Thank you for choosing Ahuike Hospital.</p>
+          <p>Thank you for choosing the Ahuike App.</p>
           <hr style="border: 0; border-top: 1px solid #e0e0e0; margin: 20px 0;">
           <p style="font-size: 12px; color: #6c757d; text-align: center;">This is an automated receipt. Please do not reply to this email.</p>
         </div>
@@ -70,9 +73,13 @@ export async function sendAppointmentConfirmationEmail(
     }),
   });
 
+  const statusCode = response.statusCode ?? response.status;
+  console.log(`[EmailService] Resend API responded with status: ${statusCode}`);
   const body = (await response.json()) as any;
+  console.log(`[EmailService] Resend API response body:`, JSON.stringify(body, null, 2));
 
   if (!response.ok) {
     throw new Error(`Resend email delivery failed: ${JSON.stringify(body)}`);
   }
+
 }
