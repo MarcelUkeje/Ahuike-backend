@@ -9,28 +9,28 @@ INSERT INTO departments (id, name, slug, description, is_active) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO doctors
-  (id, name, slug, specialty, department_id, bio, qualifications, rating, rating_count, consultation_fee, is_available)
+  (id, name, slug, specialty, department_id, bio, qualifications, rating, rating_count, consultation_fee, is_available, image_url)
 VALUES
   (
     'dr-amaka-obi', 'Dr. Amaka Obi', 'dr-amaka-obi',
     'General Practitioner', 'dept-general',
     'Dr. Amaka Obi is a compassionate GP with over 10 years of experience in primary care.',
     ARRAY['MBBS (University of Lagos)', 'FMCGP'],
-    4.80, 312, 15000, true
+    4.80, 312, 15000, true, 'assets/images/dr_obi.jpeg'
   ),
   (
     'dr-emeka-nwosu', 'Dr. Emeka Nwosu', 'dr-emeka-nwosu',
     'Cardiologist', 'dept-cardiology',
     'Dr. Emeka Nwosu specialises in interventional cardiology and cardiac rehabilitation.',
     ARRAY['MBBS (UNILAG)', 'FMCP (Cardiology)', 'Fellowship — Lagos Heart Institute'],
-    4.90, 187, 100, true
+    4.90, 187, 100, true, 'assets/images/dr_nwosu.jpeg'
   ),
   (
     'dr-chioma-eze', 'Dr. Chioma Eze', 'dr-chioma-eze',
     'Pediatrician', 'dept-pediatrics',
     'Dr. Chioma Eze provides compassionate, evidence-based care for children from birth to 18.',
     ARRAY['MBBS (UNIBEN)', 'FMCP (Paediatrics)'],
-    4.75, 423, 18000, true
+    4.75, 423, 18000, true, 'assets/images/dr_chioma.jpeg'
   )
 ON CONFLICT (id) DO UPDATE SET
   consultation_fee = EXCLUDED.consultation_fee,
@@ -39,7 +39,8 @@ ON CONFLICT (id) DO UPDATE SET
   qualifications = EXCLUDED.qualifications,
   rating = EXCLUDED.rating,
   rating_count = EXCLUDED.rating_count,
-  is_available = EXCLUDED.is_available;
+  is_available = EXCLUDED.is_available,
+  image_url = EXCLUDED.image_url;
 
 -- Appointment slots for the next 3 working days (relative dates)
 INSERT INTO appointment_slots (id, doctor_id, slot_date, start_time, end_time, is_booked) VALUES

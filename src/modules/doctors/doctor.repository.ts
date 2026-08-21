@@ -170,7 +170,7 @@ const seedDoctors: Doctor[] = [
   {
     id: 'dr-amaka-obi', name: 'Dr. Amaka Obi', slug: 'dr-amaka-obi',
     specialty: 'General Practitioner', departmentId: 'dept-general',
-    imageUrl: null, rating: 4.8, ratingCount: 312, consultationFee: 15000, isAvailable: true,
+    imageUrl: 'assets/images/dr_obi.jpeg', rating: 4.8, ratingCount: 312, consultationFee: 15000, isAvailable: true,
     bio: 'Dr. Amaka Obi is a compassionate GP with 10+ years of experience.',
     qualifications: ['MBBS (University of Lagos)', 'FMCGP'],
     availableSlots: [],
@@ -178,7 +178,7 @@ const seedDoctors: Doctor[] = [
   {
     id: 'dr-emeka-nwosu', name: 'Dr. Emeka Nwosu', slug: 'dr-emeka-nwosu',
     specialty: 'Cardiologist', departmentId: 'dept-cardiology',
-    imageUrl: null, rating: 4.9, ratingCount: 187, consultationFee: 100, isAvailable: true,
+    imageUrl: 'assets/images/dr_nwosu.jpeg', rating: 4.9, ratingCount: 187, consultationFee: 100, isAvailable: true,
     bio: 'Dr. Emeka Nwosu specialises in interventional cardiology.',
     qualifications: ['MBBS (UNILAG)', 'FMCP (Cardiology)'],
     availableSlots: [],
