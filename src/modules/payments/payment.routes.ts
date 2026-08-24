@@ -37,9 +37,15 @@ export function paymentRoutes(env: AppEnvironment, appointmentRepo: AppointmentR
 
       const event = request.body as any;
       if (event.event === 'charge.success') {
-        const idempotencyKey = event.data.reference;
-        // Find appointment by reference/idempotencyKey
-        const appt = await appointmentRepo.findByIdempotencyKey(idempotencyKey);
+        const reference = event.data.reference as string;
+        
+        let appt = await appointmentRepo.findByIdempotencyKey(reference);
+        if (!appt && reference.includes('_')) {
+          const potentialId = reference.split('_')[0];
+          const found = await appointmentRepo.findById(potentialId);
+          if (found) appt = found;
+        }
+
         if (appt && appt.status === 'pending') {
           await appointmentRepo.confirmPayment(appt.id);
           
@@ -109,6 +115,20 @@ export function paymentRoutes(env: AppEnvironment, appointmentRepo: AppointmentR
       );
 
       const success = await verifyPayment(env, reference);
+      
+      if (success) {
+        let appt = await appointmentRepo.findByIdempotencyKey(reference);
+        if (!appt && reference.includes('_')) {
+          const potentialId = reference.split('_')[0];
+          const found = await appointmentRepo.findById(potentialId);
+          if (found) appt = found;
+        }
+
+        if (appt && appt.status === 'pending') {
+          await appointmentRepo.confirmPayment(appt.id);
+        }
+      }
+
       return reply.code(200).send({ data: { success } });
     });
   };
