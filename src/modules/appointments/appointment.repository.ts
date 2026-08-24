@@ -11,6 +11,8 @@ export interface CreateAppointmentInput {
   slotId: string;
   reasonForVisit: string;
   consultationFee: number;
+  idempotencyKey?: string;
+  paymentUrl?: string;
 }
 
 export interface AppointmentListQuery extends PaginationQuery {
@@ -21,6 +23,7 @@ export interface AppointmentRepository {
   create(input: CreateAppointmentInput): Promise<Appointment>;
   listForPatient(patientId: string, query?: Partial<AppointmentListQuery>): Promise<PaginatedResult<Appointment>>;
   findById(id: string): Promise<Appointment | null>;
+  findByIdempotencyKey(key: string): Promise<Appointment | null>;
   confirmPayment(id: string): Promise<void>;
   delete(id: string): Promise<void>;
 }
@@ -36,11 +39,11 @@ export class NeonAppointmentRepository implements AppointmentRepository {
     await sql`
       INSERT INTO appointments
         (id, patient_id, doctor_id, department_id, slot_id,
-         reason_for_visit, consultation_fee, status, created_at, updated_at)
+         reason_for_visit, consultation_fee, status, idempotency_key, payment_url, created_at, updated_at)
       VALUES
         (${id}, ${input.patientId}, ${input.doctorId}, ${input.departmentId},
          ${input.slotId}, ${input.reasonForVisit}, ${input.consultationFee},
-         'pending', ${now}, ${now})
+         'pending', ${input.idempotencyKey ?? null}, ${input.paymentUrl ?? null}, ${now}, ${now})
     `;
 
     await sql`
@@ -58,6 +61,10 @@ export class NeonAppointmentRepository implements AppointmentRepository {
       consultationFee: input.consultationFee,
       status: 'pending',
       notes: null,
+      idempotencyKey: input.idempotencyKey ?? null,
+      paymentUrl: input.paymentUrl ?? null,
+      doctorInstructions: null,
+      followUpDate: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -81,7 +88,7 @@ export class NeonAppointmentRepository implements AppointmentRepository {
 
       const rows = (await sql`
         SELECT id, patient_id, doctor_id, department_id, slot_id,
-               reason_for_visit, consultation_fee, status, notes, created_at, updated_at
+               reason_for_visit, consultation_fee, status, notes, idempotency_key, payment_url, created_at, updated_at
         FROM appointments
         WHERE patient_id = ${patientId} AND status = ${status}
         ORDER BY created_at DESC
@@ -98,7 +105,7 @@ export class NeonAppointmentRepository implements AppointmentRepository {
 
     const rows = (await sql`
       SELECT id, patient_id, doctor_id, department_id, slot_id,
-             reason_for_visit, consultation_fee, status, notes, created_at, updated_at
+             reason_for_visit, consultation_fee, status, notes, idempotency_key, payment_url, created_at, updated_at
       FROM appointments
       WHERE patient_id = ${patientId}
       ORDER BY created_at DESC
@@ -108,11 +115,22 @@ export class NeonAppointmentRepository implements AppointmentRepository {
     return buildResult(rows.map(toAppointment), total, limit, offset);
   }
 
+  async findByIdempotencyKey(key: string): Promise<Appointment | null> {
+    const sql = getDb();
+    const rows = (await sql`
+      SELECT id, patient_id, doctor_id, department_id, slot_id,
+             reason_for_visit, consultation_fee, status, notes, idempotency_key, payment_url, created_at, updated_at
+      FROM appointments
+      WHERE idempotency_key = ${key}
+    `) as Record<string, unknown>[];
+    return rows.length === 0 ? null : toAppointment(rows[0]!);
+  }
+
   async findById(id: string): Promise<Appointment | null> {
     const sql = getDb();
     const rows = (await sql`
       SELECT id, patient_id, doctor_id, department_id, slot_id,
-             reason_for_visit, consultation_fee, status, notes, created_at, updated_at
+             reason_for_visit, consultation_fee, status, notes, idempotency_key, payment_url, created_at, updated_at
       FROM appointments
       WHERE id = ${id}
     `) as Record<string, unknown>[];
@@ -145,6 +163,8 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
       ...input,
       status: 'pending',
       notes: null,
+      idempotencyKey: input.idempotencyKey ?? null,
+      paymentUrl: input.paymentUrl ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -166,6 +186,13 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
 
     const page = all.slice(offset, offset + limit);
     return buildResult(page, all.length, limit, offset);
+  }
+
+  async findByIdempotencyKey(key: string): Promise<Appointment | null> {
+    for (const appt of this.store.values()) {
+      if (appt.idempotencyKey === key) return appt;
+    }
+    return null;
   }
 
   async findById(id: string): Promise<Appointment | null> {
@@ -203,6 +230,8 @@ function toAppointment(row: Record<string, unknown>): Appointment {
     consultationFee: row['consultation_fee'] as number,
     status: row['status'] as Appointment['status'],
     notes: (row['notes'] as string | null | undefined) ?? null,
+    idempotencyKey: (row['idempotency_key'] as string | null | undefined) ?? null,
+    paymentUrl: (row['payment_url'] as string | null | undefined) ?? null,
     createdAt: row['created_at'] instanceof Date ? row['created_at'].toISOString() : String(row['created_at']),
     updatedAt: row['updated_at'] instanceof Date ? row['updated_at'].toISOString() : String(row['updated_at']),
   };

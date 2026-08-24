@@ -19,6 +19,10 @@ export interface Appointment {
   consultationFee: number;  // integer kobo/naira (₦)
   status: AppointmentStatus;
   notes: string | null;
+  idempotencyKey?: string | null;
+  paymentUrl?: string | null;
+  doctorInstructions?: string | null;
+  followUpDate?: string | null;
   createdAt: string;
   updatedAt: string;
 }

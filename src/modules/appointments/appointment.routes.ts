@@ -21,9 +21,12 @@ const listQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(PAGINATION_DEFAULTS.offset),
 });
 
+import type { EmailService } from '../emails/email.service.js';
+
 export function appointmentRoutes(
   appointmentRepo: AppointmentRepository,
   doctors: DoctorRepository,
+  emailService: EmailService
 ): FastifyPluginAsync {
   return async (app) => {
     // All appointment routes require a valid JWT
@@ -60,6 +63,22 @@ export function appointmentRoutes(
       const patientId = request.user.sub;
       const input = parseInput(createAppointmentSchema, request.body);
 
+      const idempotencyKey = request.headers['idempotency-key'] as string;
+      if (!idempotencyKey) {
+        throw new HttpError(400, 'MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required for booking appointments.');
+      }
+
+      // Check if already exists
+      const existing = await appointmentRepo.findByIdempotencyKey(idempotencyKey);
+      if (existing) {
+        if (existing.status === 'pending' || existing.status === 'confirmed') {
+          return { data: existing };
+        }
+        // If it was cancelled or failed, we could technically allow retry, but for simplicity we can return it.
+        return { data: existing };
+      }
+
+
       // ── 1. Atomically claim the slot (one round-trip; rejects past slots too) ──
       const slot = await doctors.atomicClaimSlot(input.slotId);
       if (!slot) {
@@ -89,14 +108,45 @@ export function appointmentRoutes(
 
       // ── 3. Create the appointment (compensate on failure) ─────────────────────
       try {
-        const appointment = await appointmentRepo.create({
-          patientId,
-          doctorId: input.doctorId,
-          departmentId: input.departmentId,
-          slotId: input.slotId,
-          reasonForVisit: input.reasonForVisit,
-          consultationFee: doctor.consultationFee,
+        
+      // ── Initialize Paystack Payment ─────────────────────────────────────────────
+      let paymentUrl = null;
+      try {
+        const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: request.user.email,
+            amount: doctor.consultationFee * 100, // kobo
+            reference: idempotencyKey, 
+            callback_url: `${process.env.FRONTEND_URL || 'http://localhost:4000'}/api/v1/payments/callback`
+          })
         });
+        
+        if (paystackRes.ok) {
+          const pData = await paystackRes.json();
+          paymentUrl = pData.data.authorization_url;
+        } else {
+          app.log.error('Paystack initialization failed: ' + await paystackRes.text());
+        }
+      } catch (err) {
+        app.log.error('Paystack error: ' + err);
+      }
+
+      const appointment = await appointmentRepo.create({
+        patientId,
+        doctorId: input.doctorId,
+        departmentId: input.departmentId,
+        slotId: input.slotId,
+        reasonForVisit: input.reasonForVisit,
+        consultationFee: doctor.consultationFee,
+        idempotencyKey,
+        paymentUrl
+      });
+
 
         return reply.code(201).send({ data: appointment });
       } catch (err) {
@@ -121,27 +171,27 @@ export function appointmentRoutes(
       await appointmentRepo.confirmPayment(appointmentId);
 
       const dbUrl = process.env.DATABASE_URL;
-      const resendApiKey = process.env.RESEND_API_KEY;
 
       console.log(`[ConfirmAppointment] Payment confirmed for: ${appointmentId}`);
-      console.log(`[ConfirmAppointment] Env check: dbUrl=${!!dbUrl}, resendApiKey=${!!resendApiKey}`);
 
-      if (dbUrl && resendApiKey && resendApiKey !== 're_REPLACE_WITH_YOUR_RESEND_API_KEY') {
+      if (dbUrl) {
         // Run email delivery asynchronously in the background so it does not block the response
         (async () => {
 
           try {
-            const sql = getDb();
+            // sql already defined if confirmed, else define here
+      const sql = getDb();
             const rows = (await sql`
               SELECT 
                 p.name AS patient_name,
-                p.email AS patient_email,
+                u.email AS patient_email,
                 d.name AS doctor_name,
                 d.specialty,
                 s.slot_date,
                 s.start_time
               FROM appointments a
               JOIN patients p ON a.patient_id = p.id
+              JOIN users u ON p.user_id = u.id
               JOIN doctors d ON a.doctor_id = d.id
               JOIN appointment_slots s ON a.slot_id = s.id
               WHERE a.id = ${appointmentId}
@@ -149,7 +199,7 @@ export function appointmentRoutes(
 
             if (rows.length > 0) {
               const row = rows[0]!;
-              await sendAppointmentConfirmationEmail(resendApiKey, {
+              await sendAppointmentConfirmationEmail(emailService, {
                 to: row.patient_email as string,
                 patientName: row.patient_name as string,
                 doctorName: row.doctor_name as string,
