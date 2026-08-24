@@ -82,7 +82,7 @@ export class NeonDoctorRepository implements DoctorRepository {
     if (query.minRating !== undefined) countQuery += ` AND d.rating >= ${query.minRating}`;
 
     const countRows = (await (sql as any).query(countQuery)) as { count: string }[];
-    const total = Number(countRows[0].count);
+    const total = countRows.length > 0 ? Number(countRows[0]!.count) : 0;
 
     const summaries = rows.map(toDoctorSummary);
     return buildResult(summaries, total, limit, offset);

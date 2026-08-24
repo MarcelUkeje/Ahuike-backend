@@ -13,15 +13,6 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
-CREATE TABLE IF NOT EXISTS otp_codes (
-  id         TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  code       TEXT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_otp_codes_user ON otp_codes(user_id);
-
 CREATE TABLE IF NOT EXISTS patients (
   id            TEXT        PRIMARY KEY,
   user_id       TEXT        UNIQUE NOT NULL REFERENCES users(id),
@@ -141,7 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_medical_records_patient   ON medical_records(pati
 CREATE INDEX IF NOT EXISTS idx_prescriptions_patient     ON prescriptions(patient_id);
 
 
-CREATE TABLE IF NOT EXISTS reviews (
+CREATE TABLE reviews (
     id VARCHAR(50) PRIMARY KEY,
     appointment_id VARCHAR(50) NOT NULL REFERENCES appointments(id),
     doctor_id VARCHAR(50) NOT NULL REFERENCES doctors(id),
