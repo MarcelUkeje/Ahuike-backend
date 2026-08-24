@@ -42,6 +42,8 @@ import {
 } from './modules/prescriptions/prescription.repository.js';
 import { prescriptionRoutes } from './modules/prescriptions/prescription.routes.js';
 import { paymentRoutes } from './modules/payments/payment.routes.js';
+import { NeonUserRepository, InMemoryUserRepository } from './modules/users/user.repository.js';
+import { EmailService } from './modules/emails/email.service.js';
 
 export interface AppDependencies {
   departments?:    DepartmentRepository;
@@ -50,6 +52,13 @@ export interface AppDependencies {
   patients?:       PatientRepository;
   medicalRecords?: MedicalRecordRepository;
   prescriptions?:  PrescriptionRepository;
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    authenticate: any;
+    requireAdmin: any;
+  }
 }
 
 export async function buildApp(
@@ -63,9 +72,24 @@ export async function buildApp(
     }),
   });
 
-  await app.register(helmet);
+  await app.register(helmet, {
+    // Disable CSP so our static HTML can load normally, or configure it carefully
+    contentSecurityPolicy: false
+  });
   await app.register(cors, {
     origin: env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map((v) => v.trim()),
+  });
+
+  // ── Static Web Dashboard ──────────────────────────────────────────────────────
+  await app.register(import('@fastify/static').then((m) => m.default), {
+    root: new URL('../public/admin', import.meta.url).pathname,
+    prefix: '/admin/',
+    decorateReply: false // To avoid conflicts if registered multiple times
+  });
+
+  // Redirect /admin to /admin/ so it serves index.html correctly
+  app.get('/admin', async (request, reply) => {
+    return reply.redirect('/admin/');
   });
 
   // ── JWT ──────────────────────────────────────────────────────────────────────
@@ -75,9 +99,21 @@ export async function buildApp(
   app.decorate('authenticate', async function (request: any, reply: any) {
     try {
       await request.jwtVerify();
+      if (request.user.type === 'refresh') {
+        throw new Error('Refresh tokens cannot be used to access API routes.');
+      }
     } catch {
       void reply.code(401).send({
         error: { code: 'UNAUTHENTICATED', message: 'A valid authentication token is required.' },
+      });
+    }
+  });
+
+  // Attach a preHandler for Admin-only routes
+  app.decorate('requireAdmin', async function (request: any, reply: any) {
+    if (!request.user || request.user.role !== 'admin') {
+      void reply.code(403).send({
+        error: { code: 'FORBIDDEN', message: 'Admin privileges required.' },
       });
     }
   });
@@ -102,18 +138,86 @@ export async function buildApp(
   const patientRepo = dependencies.patients     ?? (hasDb ? new NeonPatientRepository()     : new InMemoryPatientRepository());
   const mrRepo      = dependencies.medicalRecords ?? (hasDb ? new NeonMedicalRecordRepository() : new InMemoryMedicalRecordRepository());
   const rxRepo      = dependencies.prescriptions  ?? (hasDb ? new NeonPrescriptionRepository()  : new InMemoryPrescriptionRepository());
+  const userRepo    = hasDb ? new NeonUserRepository() : new InMemoryUserRepository();
+  const emailService = new EmailService();
 
   // ── Routes ────────────────────────────────────────────────────────────────────
-  await app.register(authRoutes(patientRepo),                      { prefix: '/api/v1/auth' });
-  await app.register(patientRoutes(patientRepo),                   { prefix: '/api/v1/patients' });
+  await app.register(authRoutes(userRepo, patientRepo, emailService), { prefix: '/api/v1/auth' });
+  await app.register(patientRoutes(patientRepo, userRepo),                   { prefix: '/api/v1/patients' });
   await app.register(departmentRoutes(deptRepo),                   { prefix: '/api/v1/departments' });
-  await app.register(doctorRoutes(doctorRepo),                     { prefix: '/api/v1/doctors' });
-  await app.register(appointmentRoutes(apptRepo, doctorRepo),      { prefix: '/api/v1/appointments' });
+  await app.register(doctorRoutes(doctorRepo, userRepo),                     { prefix: '/api/v1/doctors' });
+  await app.register(appointmentRoutes(apptRepo, doctorRepo, emailService),      { prefix: '/api/v1/appointments' });
   await app.register(medicalRecordRoutes(mrRepo),                  { prefix: '/api/v1/medical-records' });
   await app.register(prescriptionRoutes(rxRepo),                   { prefix: '/api/v1/prescriptions' });
-  await app.register(paymentRoutes(env),                           { prefix: '/api/v1/payments' });
+  await app.register(paymentRoutes(env, apptRepo, emailService), { prefix: '/api/v1/payments' });  // ── Error handlers ────────────────────────────────────────────────────────────
 
-  // ── Error handlers ────────────────────────────────────────────────────────────
+  app.addHook('onReady', async function () {
+    try {
+      const list = await doctorRepo.list({ limit: 1000 });
+      app.log.info(`Syncing appointment slots for ${list.items.length} doctors...`);
+      for (const doc of list.items) {
+        doctorRepo.ensureSlotsUpToDate(doc.id).catch(err => app.log.error(err));
+      }
+      app.log.info('Slot sync complete.');
+
+      // Daily Follow-up Reminder Sweeper (runs every hour for demo purposes, usually daily at 8AM)
+      setInterval(async () => {
+        try {
+          const sql = (await import('./lib/db.js')).getDb();
+          
+          // Find appointments with follow_up_date in the next 24 hours that haven't been reminded
+          // For simplicity, we just send emails if follow_up_date is exactly tomorrow.
+          // Real apps would have a 'reminded_at' column to avoid spamming.
+          // We will skip actual mailing here to prevent spam loop, but logic is logged.
+          const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+          const nextDay = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+          
+          const followUps = (await sql`
+            SELECT a.id, u.email, du.name as doctor_name
+            FROM appointments a
+            JOIN patients p ON a.patient_id = p.id
+            JOIN users u ON p.user_id = u.id
+            JOIN doctors d ON a.doctor_id = d.id
+            JOIN users du ON d.user_id = du.id
+            WHERE a.follow_up_date >= ${tomorrow} AND a.follow_up_date < ${nextDay}
+          `) as { id: string, email: string, doctor_name: string }[];
+
+          for (const appt of followUps) {
+            app.log.info(`Sending follow-up reminder to ${appt.email} for Dr. ${appt.doctor_name}`);
+            // await emailService.send({...}) 
+          }
+        } catch (err) {
+          app.log.error('Follow-up Sweeper error: ' + err);
+        }
+      }, 60 * 60 * 1000); // Check every hour
+
+
+      // 10-Minute Expiration Sweeper
+      setInterval(async () => {
+        try {
+          const sql = (await import('./lib/db.js')).getDb();
+          const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+          
+          // Find expired pending appointments
+          const expiredRows = (await sql`
+            SELECT id, slot_id FROM appointments 
+            WHERE status = 'pending' AND created_at < ${tenMinsAgo}
+          `) as { id: string, slot_id: string }[];
+
+          for (const row of expiredRows) {
+            await sql`UPDATE appointments SET status = 'cancelled', notes = 'Payment expired' WHERE id = ${row.id}`;
+            await sql`UPDATE appointment_slots SET is_booked = false WHERE id = ${row.slot_id}`;
+            app.log.info(`Expired appointment ${row.id} and freed slot ${row.slot_id}`);
+          }
+        } catch (err) {
+          app.log.error('Sweeper error: ' + err);
+        }
+      }, 60 * 1000); // Check every minute
+
+    } catch (err) {
+      app.log.error(err);
+    }
+  });
   app.setNotFoundHandler((_request, reply) => {
     void reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Route not found.' } });
   });
