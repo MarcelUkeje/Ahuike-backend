@@ -25,4 +25,6 @@ export interface Appointment {
   followUpDate?: string | null;
   createdAt: string;
   updatedAt: string;
+  slotDate?: string | null;
+  startTime?: string | null;
 }

@@ -88,11 +88,13 @@ export class NeonAppointmentRepository implements AppointmentRepository {
       const total = Number(countRows[0]!.total);
 
       const rows = (await sql`
-        SELECT id, patient_id, doctor_id, department_id, slot_id,
-               reason_for_visit, consultation_fee, status, notes, idempotency_key, payment_url, created_at, updated_at
-        FROM appointments
-        WHERE patient_id = ${patientId} AND status = ${status}
-        ORDER BY created_at DESC
+        SELECT a.id, a.patient_id, a.doctor_id, a.department_id, a.slot_id,
+               a.reason_for_visit, a.consultation_fee, a.status, a.notes, a.idempotency_key, a.payment_url, a.created_at, a.updated_at,
+               s.slot_date, s.start_time
+        FROM appointments a
+        LEFT JOIN appointment_slots s ON a.slot_id = s.id
+        WHERE a.patient_id = ${patientId} AND a.status = ${status}
+        ORDER BY a.created_at DESC
         LIMIT ${limit} OFFSET ${offset}
       `) as Record<string, unknown>[];
 
@@ -105,11 +107,13 @@ export class NeonAppointmentRepository implements AppointmentRepository {
     const total = Number(countRows[0]!.total);
 
     const rows = (await sql`
-      SELECT id, patient_id, doctor_id, department_id, slot_id,
-             reason_for_visit, consultation_fee, status, notes, idempotency_key, payment_url, created_at, updated_at
-      FROM appointments
-      WHERE patient_id = ${patientId}
-      ORDER BY created_at DESC
+      SELECT a.id, a.patient_id, a.doctor_id, a.department_id, a.slot_id,
+             a.reason_for_visit, a.consultation_fee, a.status, a.notes, a.idempotency_key, a.payment_url, a.created_at, a.updated_at,
+             s.slot_date, s.start_time
+      FROM appointments a
+      LEFT JOIN appointment_slots s ON a.slot_id = s.id
+      WHERE a.patient_id = ${patientId}
+      ORDER BY a.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `) as Record<string, unknown>[];
 
@@ -119,10 +123,12 @@ export class NeonAppointmentRepository implements AppointmentRepository {
   async findByIdempotencyKey(key: string): Promise<Appointment | null> {
     const sql = getDb();
     const rows = (await sql`
-      SELECT id, patient_id, doctor_id, department_id, slot_id,
-             reason_for_visit, consultation_fee, status, notes, idempotency_key, payment_url, created_at, updated_at
-      FROM appointments
-      WHERE idempotency_key = ${key}
+      SELECT a.id, a.patient_id, a.doctor_id, a.department_id, a.slot_id,
+             a.reason_for_visit, a.consultation_fee, a.status, a.notes, a.idempotency_key, a.payment_url, a.created_at, a.updated_at,
+             s.slot_date, s.start_time
+      FROM appointments a
+      LEFT JOIN appointment_slots s ON a.slot_id = s.id
+      WHERE a.idempotency_key = ${key}
     `) as Record<string, unknown>[];
     return rows.length === 0 ? null : toAppointment(rows[0]!);
   }
@@ -130,10 +136,12 @@ export class NeonAppointmentRepository implements AppointmentRepository {
   async findById(id: string): Promise<Appointment | null> {
     const sql = getDb();
     const rows = (await sql`
-      SELECT id, patient_id, doctor_id, department_id, slot_id,
-             reason_for_visit, consultation_fee, status, notes, idempotency_key, payment_url, created_at, updated_at
-      FROM appointments
-      WHERE id = ${id}
+      SELECT a.id, a.patient_id, a.doctor_id, a.department_id, a.slot_id,
+             a.reason_for_visit, a.consultation_fee, a.status, a.notes, a.idempotency_key, a.payment_url, a.created_at, a.updated_at,
+             s.slot_date, s.start_time
+      FROM appointments a
+      LEFT JOIN appointment_slots s ON a.slot_id = s.id
+      WHERE a.id = ${id}
     `) as Record<string, unknown>[];
     return rows.length === 0 ? null : toAppointment(rows[0]!);
   }
@@ -249,6 +257,8 @@ function toAppointment(row: Record<string, unknown>): Appointment {
     notes: (row['notes'] as string | null | undefined) ?? null,
     idempotencyKey: (row['idempotency_key'] as string | null | undefined) ?? null,
     paymentUrl: (row['payment_url'] as string | null | undefined) ?? null,
+    slotDate: (row['slot_date'] as string | null | undefined) ?? null,
+    startTime: (row['start_time'] as string | null | undefined) ?? null,
     createdAt: row['created_at'] instanceof Date ? row['created_at'].toISOString() : String(row['created_at']),
     updatedAt: row['updated_at'] instanceof Date ? row['updated_at'].toISOString() : String(row['updated_at']),
   };
