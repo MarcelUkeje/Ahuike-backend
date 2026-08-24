@@ -1,24 +1,14 @@
-import type { Patient } from '../patients/patient.model.js';
-
-// ── Input / Output DTOs ──────────────────────────────────────────────────────
-
-export interface RegisterInput {
-  name: string;
-  email: string;
-  password: string;
-}
-
-export interface LoginInput {
-  email: string;
-  password: string;
-}
-
 export interface AuthTokenPayload {
-  sub: string; // patientId
+  sub: string; // userId
   email: string;
+  role: string;
 }
 
 export interface AuthResponse {
-  token: string;
-  patient: Patient;
+  accessToken: string;
+  refreshToken: string;
+  token?: string; // backwards compatibility
+  user?: { id: string; email: string; role: string };
+  patient?: any;
+  profile?: any;
 }
