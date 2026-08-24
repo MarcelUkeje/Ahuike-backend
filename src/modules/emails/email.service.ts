@@ -1,3 +1,4 @@
+import dns from 'node:dns/promises';
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 
@@ -20,6 +21,8 @@ export class EmailService {
     }
 
     this.defaultFrom = `Ahuike Hospital <${user}>`;
+    
+    // We start with the standard host, but we will override it per-request
     this.transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
@@ -29,9 +32,9 @@ export class EmailService {
         pass,
       },
       tls: {
+        servername: 'smtp.gmail.com', // Required for SNI when connecting via raw IP
         rejectUnauthorized: false
       },
-      // Force IPv4
       family: 4,
     } as any);
   }
@@ -44,6 +47,12 @@ export class EmailService {
     }
 
     try {
+      // 1. Manually resolve the IPv4 address to completely bypass Alpine/Render IPv6 bugs
+      const lookupResult = await dns.lookup('smtp.gmail.com', { family: 4 });
+      
+      // 2. Override the host with the raw IPv4 address for this connection
+      (this.transporter.options as any).host = lookupResult.address;
+
       const info = await this.transporter.sendMail({
         from: this.defaultFrom,
         to: options.to,
