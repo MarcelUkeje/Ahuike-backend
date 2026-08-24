@@ -34,7 +34,7 @@ export class NeonDoctorRepository implements DoctorRepository {
 
     let dbQuery = `
       SELECT 
-        d.id, u.name, d.slug, d.specialty, d.department_id, d.image_url, 
+        d.id, d.name, d.slug, d.specialty, d.department_id, d.image_url, 
         d.rating, d.rating_count, d.consultation_fee, d.is_available
       FROM doctors d
       JOIN users u ON d.user_id = u.id
@@ -46,7 +46,7 @@ export class NeonDoctorRepository implements DoctorRepository {
     }
     if (query.query) {
       const q = query.query.replace(/'/g, "''");
-      dbQuery += ` AND (u.name ILIKE '%${q}%' OR d.specialty ILIKE '%${q}%')`;
+      dbQuery += ` AND (d.name ILIKE '%${q}%' OR d.specialty ILIKE '%${q}%')`;
     }
     if (query.minPrice !== undefined) {
       dbQuery += ` AND d.consultation_fee >= ${query.minPrice}`;
@@ -63,25 +63,25 @@ export class NeonDoctorRepository implements DoctorRepository {
     } else if (query.sortBy === 'availability') {
       dbQuery += ` ORDER BY d.rating DESC`; // fallback
     } else {
-      dbQuery += ` ORDER BY u.name ASC`;
+      dbQuery += ` ORDER BY d.name ASC`;
     }
 
     dbQuery += ` LIMIT ${limit} OFFSET ${offset}`;
 
     const sql = getDb();
-    const rows = (await (sql as any)(dbQuery)) as unknown as any[];
+    const rows = (await (sql as any).query(dbQuery)) as unknown as any[];
     
     let countQuery = `SELECT COUNT(*) FROM doctors d JOIN users u ON d.user_id = u.id WHERE d.is_available = true`;
     if (query.departmentId) countQuery += ` AND d.department_id = '${query.departmentId.replace(/'/g, "''")}'`;
     if (query.query) {
       const q = query.query.replace(/'/g, "''");
-      countQuery += ` AND (u.name ILIKE '%${q}%' OR d.specialty ILIKE '%${q}%')`;
+      countQuery += ` AND (d.name ILIKE '%${q}%' OR d.specialty ILIKE '%${q}%')`;
     }
     if (query.minPrice !== undefined) countQuery += ` AND d.consultation_fee >= ${query.minPrice}`;
     if (query.maxPrice !== undefined) countQuery += ` AND d.consultation_fee <= ${query.maxPrice}`;
     if (query.minRating !== undefined) countQuery += ` AND d.rating >= ${query.minRating}`;
 
-    const countRows = (await (sql as any)(countQuery)) as unknown as any[];
+    const countRows = (await (sql as any).query(countQuery)) as { count: string }[];
     const total = Number(countRows[0].count);
 
     const summaries = rows.map(toDoctorSummary);
