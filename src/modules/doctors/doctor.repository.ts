@@ -5,65 +5,87 @@ import type { AppointmentSlot, Doctor, DoctorSummary } from './doctor.model.js';
 
 export interface DoctorListQuery extends PaginationQuery {
   departmentId?: string;
+  query?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  minRating?: number;
+  sortBy?: 'rating' | 'availability';
 }
 
 export interface DoctorRepository {
   list(query?: Partial<DoctorListQuery>): Promise<PaginatedResult<DoctorSummary>>;
   findById(id: string): Promise<Doctor | null>;
-  create(data: { name: string; specialty: string; departmentId: string; bio: string; qualifications: string[]; consultationFee: number; imageUrl?: string | undefined }): Promise<DoctorSummary>;
+  create(data: { name: string; specialty: string; departmentId: string; bio: string; qualifications: string[]; consultationFee: number; imageUrl?: string | undefined; userId?: string }): Promise<DoctorSummary>;
   /** Atomically claim a slot only if it is unbooked and not in the past. */
   atomicClaimSlot(slotId: string): Promise<AppointmentSlot | null>;
   /** Compensating rollback: release a slot whose appointment creation subsequently failed. */
   releaseSlot(slotId: string): Promise<void>;
+  softDelete(id: string): Promise<void>;
+  ensureSlotsUpToDate(id: string): Promise<void>;
 }
 
 // ─── NeonDB implementation ────────────────────────────────────────────────────
 
 export class NeonDoctorRepository implements DoctorRepository {
+  
   async list(query: Partial<DoctorListQuery> = {}): Promise<PaginatedResult<DoctorSummary>> {
-    const sql = getDb();
-    const limit       = Math.min(query.limit ?? PAGINATION_DEFAULTS.limit, PAGINATION_DEFAULTS.maxLimit);
-    const offset      = query.offset ?? PAGINATION_DEFAULTS.offset;
-    const { departmentId } = query;
+    const limit  = Math.min(query.limit ?? PAGINATION_DEFAULTS.limit, PAGINATION_DEFAULTS.maxLimit);
+    const offset = query.offset ?? PAGINATION_DEFAULTS.offset;
 
-    if (departmentId) {
-      const countRows = (await sql`
-        SELECT COUNT(*) AS total FROM doctors WHERE department_id = ${departmentId}
-      `) as { total: string }[];
-      const total = Number(countRows[0]!.total);
+    let dbQuery = `
+      SELECT 
+        d.id, u.name, d.slug, d.specialty, d.department_id, d.image_url, 
+        d.rating, d.rating_count, d.consultation_fee, d.is_available
+      FROM doctors d
+      JOIN users u ON d.user_id = u.id
+      WHERE d.is_available = true
+    `;
 
-      const rows = (await sql`
-        SELECT d.id, d.name, d.slug, d.specialty, d.department_id, d.image_url,
-               d.rating, d.rating_count, d.consultation_fee,
-               EXISTS (
-                 SELECT 1 FROM appointment_slots s 
-                 WHERE s.doctor_id = d.id AND s.slot_date >= CURRENT_DATE AND s.is_booked = false
-               ) AS is_available
-        FROM doctors d
-        WHERE d.department_id = ${departmentId}
-        ORDER BY d.name
-        LIMIT ${limit} OFFSET ${offset}
-      `) as Record<string, unknown>[];
-
-      return buildResult(rows.map(toDoctorSummary), total, limit, offset);
+    if (query.departmentId) {
+      dbQuery += ` AND d.department_id = '${query.departmentId.replace(/'/g, "''")}'`;
+    }
+    if (query.query) {
+      const q = query.query.replace(/'/g, "''");
+      dbQuery += ` AND (u.name ILIKE '%${q}%' OR d.specialty ILIKE '%${q}%')`;
+    }
+    if (query.minPrice !== undefined) {
+      dbQuery += ` AND d.consultation_fee >= ${query.minPrice}`;
+    }
+    if (query.maxPrice !== undefined) {
+      dbQuery += ` AND d.consultation_fee <= ${query.maxPrice}`;
+    }
+    if (query.minRating !== undefined) {
+      dbQuery += ` AND d.rating >= ${query.minRating}`;
     }
 
-    const countRows = (await sql`SELECT COUNT(*) AS total FROM doctors`) as { total: string }[];
-    const total = Number(countRows[0]!.total);
+    if (query.sortBy === 'rating') {
+      dbQuery += ` ORDER BY d.rating DESC NULLS LAST`;
+    } else if (query.sortBy === 'availability') {
+      dbQuery += ` ORDER BY d.rating DESC`; // fallback
+    } else {
+      dbQuery += ` ORDER BY u.name ASC`;
+    }
 
-    const rows = (await sql`
-      SELECT d.id, d.name, d.slug, d.specialty, d.department_id, d.image_url,
-             d.rating, d.rating_count, d.consultation_fee,
-             EXISTS (
-               SELECT 1 FROM appointment_slots s 
-               WHERE s.doctor_id = d.id AND s.slot_date >= CURRENT_DATE AND s.is_booked = false
-             ) AS is_available
-      FROM doctors d
-      ORDER BY d.name
-      LIMIT ${limit} OFFSET ${offset}
-    `) as Record<string, unknown>[];
+    dbQuery += ` LIMIT ${limit} OFFSET ${offset}`;
 
-    return buildResult(rows.map(toDoctorSummary), total, limit, offset);
+    const sql = getDb();
+    const rows = (await (sql as any)(dbQuery)) as unknown as any[];
+    
+    let countQuery = `SELECT COUNT(*) FROM doctors d JOIN users u ON d.user_id = u.id WHERE d.is_available = true`;
+    if (query.departmentId) countQuery += ` AND d.department_id = '${query.departmentId.replace(/'/g, "''")}'`;
+    if (query.query) {
+      const q = query.query.replace(/'/g, "''");
+      countQuery += ` AND (u.name ILIKE '%${q}%' OR d.specialty ILIKE '%${q}%')`;
+    }
+    if (query.minPrice !== undefined) countQuery += ` AND d.consultation_fee >= ${query.minPrice}`;
+    if (query.maxPrice !== undefined) countQuery += ` AND d.consultation_fee <= ${query.maxPrice}`;
+    if (query.minRating !== undefined) countQuery += ` AND d.rating >= ${query.minRating}`;
+
+    const countRows = (await (sql as any)(countQuery)) as unknown as any[];
+    const total = Number(countRows[0].count);
+
+    const summaries = rows.map(toDoctorSummary);
+    return buildResult(summaries, total, limit, offset);
   }
 
   async findById(id: string): Promise<Doctor | null> {
@@ -131,17 +153,24 @@ export class NeonDoctorRepository implements DoctorRepository {
     };
   }
 
-  async create(data: { name: string; specialty: string; departmentId: string; bio: string; qualifications: string[]; consultationFee: number; imageUrl?: string | undefined }): Promise<DoctorSummary> {
+  async create(data: { name: string; specialty: string; departmentId: string; bio: string; qualifications: string[]; consultationFee: number; imageUrl?: string | undefined; userId?: string }): Promise<DoctorSummary> {
     const sql = getDb();
     const id = `dr-${Date.now()}`;
     const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now();
     
+    // For now, if userId is omitted, generate a dummy user
+    const userId = data.userId ?? `dummy-user-${Date.now()}`;
+    if (!data.userId) {
+      await sql`INSERT INTO users (id, email, password_hash, role) VALUES (${userId}, ${id + '@ahuike.test'}, 'hash', 'doctor') ON CONFLICT DO NOTHING`;
+    }
+
     const rows = (await sql`
-      INSERT INTO doctors (id, name, slug, specialty, department_id, bio, qualifications, consultation_fee, image_url)
-      VALUES (${id}, ${data.name}, ${slug}, ${data.specialty}, ${data.departmentId}, ${data.bio}, ${data.qualifications}, ${data.consultationFee}, ${data.imageUrl ?? null})
+      INSERT INTO doctors (id, user_id, name, slug, specialty, department_id, bio, qualifications, consultation_fee, image_url)
+      VALUES (${id}, ${userId}, ${data.name}, ${slug}, ${data.specialty}, ${data.departmentId}, ${data.bio}, ${data.qualifications}, ${data.consultationFee}, ${data.imageUrl ?? null})
       RETURNING id, name, slug, specialty, department_id, image_url, rating, rating_count, consultation_fee, is_available
     `) as Record<string, unknown>[];
     
+    await this.ensureSlotsUpToDate(id);
     return toDoctorSummary(rows[0]!);
   }
 
@@ -161,6 +190,98 @@ export class NeonDoctorRepository implements DoctorRepository {
   async releaseSlot(slotId: string): Promise<void> {
     const sql = getDb();
     await sql`UPDATE appointment_slots SET is_booked = false WHERE id = ${slotId}`;
+  }
+
+  async softDelete(id: string): Promise<void> {
+    const sql = getDb();
+    
+    const docRows = (await sql`SELECT user_id FROM doctors WHERE id = ${id}`) as { user_id: string }[];
+    if (docRows.length === 0) return;
+    const userId = docRows[0]!.user_id;
+
+    // 1. Mark doctor as unavailable
+    await sql`UPDATE doctors SET is_available = false WHERE id = ${id}`;
+
+    // 2. Deactivate the user account
+    await sql`UPDATE users SET is_active = false WHERE id = ${userId}`;
+
+    // 3. Cancel upcoming appointments
+    await sql`
+      UPDATE appointments
+      SET status = 'cancelled'
+      WHERE doctor_id = ${id}
+        AND status IN ('pending', 'confirmed')
+        AND slot_id IN (
+          SELECT id FROM appointment_slots WHERE slot_date >= CURRENT_DATE
+        )
+    `;
+
+    // 4. Delete unbooked future slots
+    await sql`
+      DELETE FROM appointment_slots
+      WHERE doctor_id = ${id}
+        AND is_booked = false
+        AND slot_date >= CURRENT_DATE
+    `;
+  }
+
+  async ensureSlotsUpToDate(id: string): Promise<void> {
+    const sql = getDb();
+    
+    // Check if the doctor is active
+    const docRows = await sql`SELECT is_available FROM doctors WHERE id = ${id}` as { is_available: boolean }[];
+    if (docRows.length === 0 || !docRows[0]!.is_available) return;
+
+    // Find the max slot_date currently in the DB
+    const maxDateRows = await sql`
+      SELECT MAX(slot_date) as max_date 
+      FROM appointment_slots 
+      WHERE doctor_id = ${id}
+    ` as { max_date: Date | null }[];
+
+    let startDate = new Date(); // Start from today
+    if (maxDateRows[0]?.max_date) {
+      const maxDate = new Date(maxDateRows[0].max_date);
+      startDate = new Date(maxDate);
+      startDate.setDate(startDate.getDate() + 1); // start from the day after the last generated slot
+    }
+
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + 30); // Generate up to 30 days out
+
+    if (startDate > endDate) {
+      return; // Already up to date
+    }
+
+    // Generate slots (Mon-Fri, 09:00 - 16:00, 30 min intervals)
+    const slotsToInsert = [];
+    let currentDate = new Date(startDate);
+
+    while (currentDate <= endDate) {
+      const day = currentDate.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+      if (day >= 1 && day <= 5) {
+        // Weekdays only
+        const dateStr = currentDate.toISOString().substring(0, 10);
+        // 9:00, 9:30, 10:00, 10:30 ... 15:30
+        for (let hour = 9; hour < 16; hour++) {
+          slotsToInsert.push({ id: `slot-${id}-${dateStr}-${hour}:00`, doctor_id: id, slot_date: dateStr, start_time: `${hour.toString().padStart(2, '0')}:00`, end_time: `${hour.toString().padStart(2, '0')}:30`, is_booked: false });
+          slotsToInsert.push({ id: `slot-${id}-${dateStr}-${hour}:30`, doctor_id: id, slot_date: dateStr, start_time: `${hour.toString().padStart(2, '0')}:30`, end_time: `${(hour+1).toString().padStart(2, '0')}:00`, is_booked: false });
+        }
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+        if (slotsToInsert.length > 0) {
+      const batchSize = 10;
+      for (let i = 0; i < slotsToInsert.length; i += batchSize) {
+        const batch = slotsToInsert.slice(i, i + batchSize);
+        await Promise.all(batch.map(slot => sql`
+          INSERT INTO appointment_slots (id, doctor_id, slot_date, start_time, end_time, is_booked)
+          VALUES (${slot.id}, ${slot.doctor_id}, ${slot.slot_date}, ${slot.start_time}, ${slot.end_time}, ${slot.is_booked})
+          ON CONFLICT DO NOTHING
+        `));
+      }
+    }
   }
 }
 
@@ -223,6 +344,7 @@ export class InMemoryDoctorRepository implements DoctorRepository {
   async findById(id: string): Promise<Doctor | null> {
     const doctor = seedDoctors.find((d) => d.id === id);
     if (!doctor) return null;
+    await this.ensureSlotsUpToDate(id);
     const availableSlots = [...this.slots.values()]
       .filter((s) => s.doctorId === id && !s.isBooked)
       .sort((a, b) => `${a.slotDate}${a.startTime}`.localeCompare(`${b.slotDate}${b.startTime}`));
@@ -239,6 +361,7 @@ export class InMemoryDoctorRepository implements DoctorRepository {
     };
     seedDoctors.push(doc);
     const { bio: _b, qualifications: _q, availableSlots: _s, ...summary } = doc;
+    await this.ensureSlotsUpToDate(id);
     return summary;
   }
 
@@ -254,6 +377,17 @@ export class InMemoryDoctorRepository implements DoctorRepository {
   async releaseSlot(slotId: string): Promise<void> {
     const slot = this.slots.get(slotId);
     if (slot) this.slots.set(slotId, { ...slot, isBooked: false });
+  }
+
+  async softDelete(id: string): Promise<void> {
+    const idx = seedDoctors.findIndex((d) => d.id === id);
+    if (idx !== -1) {
+      seedDoctors[idx]!.isAvailable = false;
+    }
+  }
+
+  async ensureSlotsUpToDate(id: string): Promise<void> {
+    // Stub
   }
 }
 

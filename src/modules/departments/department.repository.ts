@@ -92,7 +92,7 @@ export class NeonDepartmentRepository implements DepartmentRepository {
 // ─── In-memory implementation (tests) ────────────────────────────────────────
 
 const seedDepartments: DepartmentSummary[] = [
-  { id: 'dept-general',     name: 'General Practice', slug: 'general-practice', description: 'Primary healthcare.',   imageUrl: null, isActive: true },
+  { id: 'dept-general-medicine',     name: 'General Practice', slug: 'general-practice', description: 'Primary healthcare.',   imageUrl: null, isActive: true },
   { id: 'dept-cardiology',  name: 'Cardiology',       slug: 'cardiology',       description: 'Heart care.',           imageUrl: null, isActive: true },
   { id: 'dept-pediatrics',  name: 'Pediatrics',       slug: 'pediatrics',       description: 'Children care.',        imageUrl: null, isActive: true },
   { id: 'dept-orthopedics', name: 'Orthopedics',      slug: 'orthopedics',      description: 'Bone & joint care.',    imageUrl: null, isActive: true },
