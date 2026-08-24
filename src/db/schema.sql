@@ -14,15 +14,16 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 CREATE TABLE IF NOT EXISTS patients (
-  id            TEXT        PRIMARY KEY,
-  user_id       TEXT        UNIQUE NOT NULL REFERENCES users(id),
-  name          TEXT        NOT NULL,
-  phone         TEXT,
-  date_of_birth DATE,
-  gender        TEXT,
-  blood_group   TEXT,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  id              TEXT        PRIMARY KEY,
+  user_id         TEXT        UNIQUE NOT NULL REFERENCES users(id),
+  name            TEXT        NOT NULL,
+  phone           TEXT,
+  dob             DATE,
+  gender          TEXT,
+  address         TEXT,
+  medical_history TEXT        NOT NULL DEFAULT '',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_patients_user ON patients(user_id);
@@ -76,10 +77,12 @@ CREATE TABLE IF NOT EXISTS appointments (
   consultation_fee INTEGER     NOT NULL,
     status           TEXT        NOT NULL DEFAULT 'pending',
   notes            TEXT,
-  idempotency_key  TEXT        UNIQUE,
-  payment_url      TEXT,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+  idempotency_key       TEXT        UNIQUE,
+  payment_url           TEXT,
+  doctor_instructions   TEXT,
+  follow_up_date        TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS appointment_status_events (
