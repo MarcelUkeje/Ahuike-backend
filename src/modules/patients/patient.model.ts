@@ -1,11 +1,17 @@
 export interface Patient {
   id: string;
+  userId: string;
   name: string;
-  email: string;
+  dob: string | null;
+  gender: string | null;
+  phone: string | null;
+  address: string | null;
+  medicalHistory: string;
   createdAt: string;
+  updatedAt: string;
 }
 
-/** Full patient record including password hash — never expose this to clients. */
-export interface PatientRecord extends Patient {
-  passwordHash: string;
+// Used for API responses to include the user's email
+export interface PatientProfile extends Patient {
+  email: string;
 }

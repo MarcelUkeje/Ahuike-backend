@@ -1,91 +1,158 @@
-import { getDb } from '../../lib/db.js';
 import { randomUUID } from 'node:crypto';
-import type { Patient, PatientRecord } from './patient.model.js';
+import { getDb } from '../../lib/db.js';
+import type { Patient, PatientProfile } from './patient.model.js';
+
+export interface CreatePatientInput {
+  userId: string;
+  name: string;
+  dob?: string;
+  gender?: string;
+  phone?: string;
+  address?: string;
+  medicalHistory?: string;
+}
+
+export interface UpdatePatientInput {
+  name?: string | undefined;
+  dob?: string | undefined;
+  gender?: string | undefined;
+  phone?: string | undefined;
+  address?: string | undefined;
+  medicalHistory?: string | undefined;
+}
 
 export interface PatientRepository {
-  findByEmail(email: string): Promise<PatientRecord | null>;
-  findById(id: string): Promise<Patient | null>;
-  create(data: { name: string; email: string; passwordHash: string }): Promise<Patient>;
+  create(input: CreatePatientInput): Promise<Patient>;
+  findByUserId(userId: string): Promise<PatientProfile | null>;
+  update(userId: string, data: UpdatePatientInput): Promise<Patient>;
 }
-
-// ─── NeonDB implementation ────────────────────────────────────────────────────
 
 export class NeonPatientRepository implements PatientRepository {
-  async findByEmail(email: string): Promise<PatientRecord | null> {
+  async create(input: CreatePatientInput): Promise<Patient> {
     const sql = getDb();
-    const rows = (await sql`
-      SELECT id, name, email, password_hash, created_at
-      FROM patients
-      WHERE email = ${email.toLowerCase()}
-    `) as Record<string, unknown>[];
-    return rows.length === 0 ? null : toRecord(rows[0]!);
+    const id = `pat_${randomUUID()}`;
+    const now = new Date().toISOString();
+
+    await sql`
+      INSERT INTO patients (id, user_id, name, dob, gender, phone, address, medical_history, created_at, updated_at)
+      VALUES (${id}, ${input.userId}, ${input.name}, ${input.dob ?? null}, ${input.gender ?? null}, ${input.phone ?? null}, ${input.address ?? null}, ${input.medicalHistory ?? ''}, ${now}, ${now})
+    `;
+
+    return {
+      id,
+      userId: input.userId,
+      name: input.name,
+      dob: input.dob ?? null,
+      gender: input.gender ?? null,
+      phone: input.phone ?? null,
+      address: input.address ?? null,
+      medicalHistory: input.medicalHistory ?? '',
+      createdAt: now,
+      updatedAt: now,
+    };
   }
 
-  async findById(id: string): Promise<Patient | null> {
+  async findByUserId(userId: string): Promise<PatientProfile | null> {
     const sql = getDb();
     const rows = (await sql`
-      SELECT id, name, email, created_at
-      FROM patients
-      WHERE id = ${id}
+      SELECT p.id, p.user_id, p.name, p.dob, p.gender, p.phone, p.address, p.medical_history, p.created_at, p.updated_at, u.email
+      FROM patients p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.user_id = ${userId}
     `) as Record<string, unknown>[];
-    return rows.length === 0 ? null : toPatient(rows[0]!);
+    if (rows.length === 0) return null;
+
+    const row = rows[0]!;
+    return {
+      id: row['id'] as string,
+      userId: row['user_id'] as string,
+      name: row['name'] as string,
+      dob: row['dob'] ? String(row['dob']) : null,
+      gender: row['gender'] as string | null,
+      phone: row['phone'] as string | null,
+      address: row['address'] as string | null,
+      medicalHistory: row['medical_history'] as string,
+      email: row['email'] as string,
+      createdAt: String(row['created_at']),
+      updatedAt: String(row['updated_at']),
+    };
   }
 
-  async create(data: { name: string; email: string; passwordHash: string }): Promise<Patient> {
+  async update(userId: string, data: UpdatePatientInput): Promise<Patient> {
     const sql = getDb();
-    const id = randomUUID();
     const rows = (await sql`
-      INSERT INTO patients (id, name, email, password_hash)
-      VALUES (${id}, ${data.name}, ${data.email.toLowerCase()}, ${data.passwordHash})
-      RETURNING id, name, email, created_at
+      UPDATE patients
+      SET 
+        name = COALESCE(${data.name ?? null}, name),
+        dob = COALESCE(${data.dob ?? null}, dob),
+        gender = COALESCE(${data.gender ?? null}, gender),
+        phone = COALESCE(${data.phone ?? null}, phone),
+        address = COALESCE(${data.address ?? null}, address),
+        medical_history = COALESCE(${data.medicalHistory ?? null}, medical_history),
+        updated_at = now()
+      WHERE user_id = ${userId}
+      RETURNING id, user_id, name, dob, gender, phone, address, medical_history, created_at, updated_at
     `) as Record<string, unknown>[];
-    return toPatient(rows[0]!);
+    
+    if (rows.length === 0) throw new Error('Patient not found');
+    const row = rows[0]!;
+    
+    return {
+      id: row['id'] as string,
+      userId: row['user_id'] as string,
+      name: row['name'] as string,
+      dob: row['dob'] ? String(row['dob']) : null,
+      gender: row['gender'] as string | null,
+      phone: row['phone'] as string | null,
+      address: row['address'] as string | null,
+      medicalHistory: row['medical_history'] as string,
+      createdAt: String(row['created_at']),
+      updatedAt: String(row['updated_at']),
+    };
   }
 }
-
-// ─── In-memory implementation (dev / test without DB) ────────────────────────
 
 export class InMemoryPatientRepository implements PatientRepository {
-  private readonly store = new Map<string, PatientRecord>();
+  private readonly store = new Map<string, Patient>();
 
-  async findByEmail(email: string): Promise<PatientRecord | null> {
-    return [...this.store.values()].find((p) => p.email === email.toLowerCase()) ?? null;
-  }
-  async findById(id: string): Promise<Patient | null> {
-    const p = this.store.get(id);
-    if (!p) return null;
-    const { passwordHash: _, ...patient } = p;
-    return patient;
-  }
-  async create(data: { name: string; email: string; passwordHash: string }): Promise<Patient> {
-    const id = randomUUID();
-    const record: PatientRecord = {
+  async create(input: CreatePatientInput): Promise<Patient> {
+    const id = `pat_${randomUUID()}`;
+    const now = new Date().toISOString();
+    const p: Patient = {
       id,
-      name: data.name,
-      email: data.email.toLowerCase(),
-      passwordHash: data.passwordHash,
-      createdAt: new Date().toISOString(),
+      userId: input.userId,
+      name: input.name,
+      dob: input.dob ?? null,
+      gender: input.gender ?? null,
+      phone: input.phone ?? null,
+      address: input.address ?? null,
+      medicalHistory: input.medicalHistory ?? '',
+      createdAt: now,
+      updatedAt: now,
     };
-    this.store.set(id, record);
-    const { passwordHash: _, ...patient } = record;
-    return patient;
+    this.store.set(id, p);
+    return p;
   }
-}
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+  async findByUserId(userId: string): Promise<PatientProfile | null> {
+    const p = [...this.store.values()].find((pat) => pat.userId === userId);
+    if (!p) return null;
+    return { ...p, email: 'mock@example.com' };
+  }
 
-function toPatient(row: Record<string, unknown>): Patient {
-  return {
-    id: row['id'] as string,
-    name: row['name'] as string,
-    email: row['email'] as string,
-    createdAt: String(row['created_at']),
-  };
-}
-
-function toRecord(row: Record<string, unknown>): PatientRecord {
-  return {
-    ...toPatient(row),
-    passwordHash: row['password_hash'] as string,
-  };
+  async update(userId: string, data: UpdatePatientInput): Promise<Patient> {
+    const p = [...this.store.values()].find((pat) => pat.userId === userId);
+    if (!p) throw new Error('Patient not found');
+    
+    if (data.name !== undefined) p.name = data.name;
+    if (data.dob !== undefined) p.dob = data.dob;
+    if (data.gender !== undefined) p.gender = data.gender;
+    if (data.phone !== undefined) p.phone = data.phone;
+    if (data.address !== undefined) p.address = data.address;
+    if (data.medicalHistory !== undefined) p.medicalHistory = data.medicalHistory;
+    p.updatedAt = new Date().toISOString();
+    
+    this.store.set(p.id, p);
+    return p;
+  }
 }
