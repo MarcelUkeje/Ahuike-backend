@@ -1,16 +1,31 @@
 -- Ahuike hospital database schema
 -- Run once against your NeonDB database before starting the server.
 
-CREATE TABLE IF NOT EXISTS patients (
+CREATE TABLE IF NOT EXISTS users (
   id            TEXT        PRIMARY KEY,
-  name          TEXT        NOT NULL,
   email         TEXT        UNIQUE NOT NULL,
   password_hash TEXT        NOT NULL,
+  role          TEXT        NOT NULL DEFAULT 'patient',
+  is_verified   BOOLEAN     NOT NULL DEFAULT false,
+  is_active     BOOLEAN     NOT NULL DEFAULT true,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+CREATE TABLE IF NOT EXISTS patients (
+  id            TEXT        PRIMARY KEY,
+  user_id       TEXT        UNIQUE NOT NULL REFERENCES users(id),
+  name          TEXT        NOT NULL,
+  phone         TEXT,
+  date_of_birth DATE,
+  gender        TEXT,
+  blood_group   TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_patients_email ON patients(email);
+CREATE INDEX IF NOT EXISTS idx_patients_user ON patients(user_id);
 
 CREATE TABLE IF NOT EXISTS departments (
   id          TEXT        PRIMARY KEY,
@@ -25,6 +40,7 @@ CREATE TABLE IF NOT EXISTS departments (
 
 CREATE TABLE IF NOT EXISTS doctors (
   id               TEXT        PRIMARY KEY,
+  user_id          TEXT        UNIQUE REFERENCES users(id),
   name             TEXT        NOT NULL,
   slug             TEXT        UNIQUE NOT NULL,
   specialty        TEXT        NOT NULL,
@@ -58,8 +74,10 @@ CREATE TABLE IF NOT EXISTS appointments (
   slot_id          TEXT        NOT NULL REFERENCES appointment_slots(id),
   reason_for_visit TEXT        NOT NULL,
   consultation_fee INTEGER     NOT NULL,
-  status           TEXT        NOT NULL DEFAULT 'pending',
+    status           TEXT        NOT NULL DEFAULT 'pending',
   notes            TEXT,
+  idempotency_key  TEXT        UNIQUE,
+  payment_url      TEXT,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -112,3 +130,16 @@ CREATE INDEX IF NOT EXISTS idx_appointments_patient      ON appointments(patient
 CREATE INDEX IF NOT EXISTS idx_appointments_slot         ON appointments(slot_id);
 CREATE INDEX IF NOT EXISTS idx_medical_records_patient   ON medical_records(patient_id);
 CREATE INDEX IF NOT EXISTS idx_prescriptions_patient     ON prescriptions(patient_id);
+
+
+CREATE TABLE reviews (
+    id VARCHAR(50) PRIMARY KEY,
+    appointment_id VARCHAR(50) NOT NULL REFERENCES appointments(id),
+    doctor_id VARCHAR(50) NOT NULL REFERENCES doctors(id),
+    patient_id VARCHAR(50) NOT NULL REFERENCES patients(id),
+    rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(appointment_id) -- A patient can only review an appointment once
+);
+  

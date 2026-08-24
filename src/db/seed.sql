@@ -2,31 +2,39 @@
 -- Safe to re-run (ON CONFLICT DO NOTHING).
 
 INSERT INTO departments (id, name, slug, description, is_active) VALUES
-  ('dept-general',     'General Practice', 'general-practice', 'Primary healthcare and general consultations for all ages.', true),
+  ('dept-general-medicine',     'General Practice', 'general-practice', 'Primary healthcare and general consultations for all ages.', true),
   ('dept-cardiology',  'Cardiology',       'cardiology',       'Specialist care for heart and cardiovascular conditions.',   true),
   ('dept-pediatrics',  'Pediatrics',       'pediatrics',       'Healthcare for infants, children, and adolescents.',         true),
   ('dept-orthopedics', 'Orthopedics',      'orthopedics',      'Bone, joint, and musculoskeletal care.',                     true)
 ON CONFLICT (id) DO NOTHING;
 
+-- Create user accounts for the seeded doctors and a default admin
+INSERT INTO users (id, email, password_hash, role, is_verified) VALUES
+  ('user-admin-01', 'admin@ahuike.com', '$2b$12$44/mKBaU/zXSLGTLK/L3FundEmpi3XDhwIbdRYgF85659vzvmsxS6', 'admin', true),
+  ('user-dr-amaka', 'amaka.obi@ahuike.test', '$2a$10$wO4e38X5U38Z4yqV2QzL4e.3QOqZ8r9y/01wz76o9rUuO17C/k7tO', 'doctor', true),
+  ('user-dr-emeka', 'emeka.nwosu@ahuike.test', '$2a$10$wO4e38X5U38Z4yqV2QzL4e.3QOqZ8r9y/01wz76o9rUuO17C/k7tO', 'doctor', true),
+  ('user-dr-chioma', 'chioma.eze@ahuike.test', '$2a$10$wO4e38X5U38Z4yqV2QzL4e.3QOqZ8r9y/01wz76o9rUuO17C/k7tO', 'doctor', true)
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO doctors
-  (id, name, slug, specialty, department_id, bio, qualifications, rating, rating_count, consultation_fee, is_available, image_url)
+  (id, user_id, name, slug, specialty, department_id, bio, qualifications, rating, rating_count, consultation_fee, is_available, image_url)
 VALUES
   (
-    'dr-amaka-obi', 'Dr. Amaka Obi', 'dr-amaka-obi',
-    'General Practitioner', 'dept-general',
+    'dr-amaka-obi', 'user-dr-amaka', 'Dr. Amaka Obi', 'dr-amaka-obi',
+    'General Practitioner', 'dept-general-medicine',
     'Dr. Amaka Obi is a compassionate GP with over 10 years of experience in primary care.',
     ARRAY['MBBS (University of Lagos)', 'FMCGP'],
     4.80, 312, 15000, true, 'assets/images/dr_obi.jpeg'
   ),
   (
-    'dr-emeka-nwosu', 'Dr. Emeka Nwosu', 'dr-emeka-nwosu',
+    'dr-emeka-nwosu', 'user-dr-emeka', 'Dr. Emeka Nwosu', 'dr-emeka-nwosu',
     'Cardiologist', 'dept-cardiology',
     'Dr. Emeka Nwosu specialises in interventional cardiology and cardiac rehabilitation.',
     ARRAY['MBBS (UNILAG)', 'FMCP (Cardiology)', 'Fellowship — Lagos Heart Institute'],
-    4.90, 187, 100, true, 'assets/images/dr_nwosu.jpeg'
+    4.90, 187, 25000, true, 'assets/images/dr_nwosu.jpeg'
   ),
   (
-    'dr-chioma-eze', 'Dr. Chioma Eze', 'dr-chioma-eze',
+    'dr-chioma-eze', 'user-dr-chioma', 'Dr. Chioma Eze', 'dr-chioma-eze',
     'Pediatrician', 'dept-pediatrics',
     'Dr. Chioma Eze provides compassionate, evidence-based care for children from birth to 18.',
     ARRAY['MBBS (UNIBEN)', 'FMCP (Paediatrics)'],

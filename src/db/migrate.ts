@@ -42,6 +42,7 @@ async function runFile(label: string, filePath: string): Promise<void> {
   }
 }
 
+await runFile('Dropping existing schema', join(__dirname, 'reset.sql'));
 await runFile('Applying schema', join(__dirname, 'schema.sql'));
 await runFile('Applying seed data', join(__dirname, 'seed.sql'));
 
