@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ahuike Admin Dashboard</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    h1, h2 { color: #0F766E; margin-top: 0; }
+    .hidden { display: none !important; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    input[type="checkbox"] { width: auto; margin-right: 8px; }
+    button { background-color: #0F766E; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+    button:hover { background-color: #0D6860; }
+    button.danger { background-color: #dc3545; }
+    button.danger:hover { background-color: #c82333; }
+    .card { border: 1px solid #ddd; padding: 15px; border-radius: 4px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .alert { padding: 10px; margin-bottom: 15px; border-radius: 4px; }
+    .alert.error { background-color: #f8d7da; color: #721c24; }
+    .alert.success { background-color: #d4edda; color: #155724; }
+    .nav { display: flex; justify-content: space-between; margin-bottom: 20px; align-items: center; }
+    .flex-row { display: flex; gap: 10px; }
+    .flex-row > * { flex: 1; }
+  </style>
+</head>
+<body>
+
+  <div class="container" id="login-section">
+    <h1>Admin Login</h1>
+    <div id="login-alert" class="alert hidden"></div>
+    <form id="login-form">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" required>
+      </div>
+      <button type="submit">Log In</button>
+    </form>
+  </div>
+
+  <div class="container hidden" id="dashboard-section">
+    <div class="nav">
+      <h1>Ahuike Admin Dashboard</h1>
+      <button onclick="logout()">Log Out</button>
+    </div>
+    
+    <div id="dash-alert" class="alert hidden"></div>
+
+    <h2>Create a Doctor</h2>
+    <form id="create-doctor-form" style="margin-bottom: 40px;">
+      <div class="flex-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="doc-name" placeholder="Dr. John Doe" required>
+        </div>
+        <div class="form-group">
+          <label>Email (For login)</label>
+          <input type="email" id="doc-email" placeholder="john.doe@ahuike.com" required>
+        </div>
+      </div>
+      <div class="flex-row">
+        <div class="form-group">
+                    <label>Temporary Password</label>
+          <div style="display: flex; gap: 5px;">
+            <input type="text" id="doc-password" required readonly style="background: #f0f0f0;">
+            <button type="button" onclick="generatePassword()" style="white-space: nowrap; font-size: 14px;">Generate</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Specialty</label>
+          <select id="doc-specialty" required>
+            <option value="">Select Specialty...</option>
+            <option value="General Practitioner / Family Physician">General Practitioner / Family Physician</option>
+            <option value="Internist">Internist</option>
+            <option value="Pediatrician">Pediatrician</option>
+            <option value="Obstetrician-Gynecologist (OB-GYN)">Obstetrician-Gynecologist (OB-GYN)</option>
+            <option value="Cardiologist">Cardiologist</option>
+            <option value="Cardiothoracic Surgeon">Cardiothoracic Surgeon</option>
+            <option value="Neurologist">Neurologist</option>
+            <option value="Neurosurgeon">Neurosurgeon</option>
+            <option value="Orthopedic Surgeon">Orthopedic Surgeon</option>
+            <option value="Oncologist">Oncologist</option>
+            <option value="Radiation Oncologist">Radiation Oncologist</option>
+            <option value="Surgical Oncologist">Surgical Oncologist</option>
+            <option value="Gastroenterologist">Gastroenterologist</option>
+            <option value="General Surgeon">General Surgeon</option>
+            <option value="Pulmonologist">Pulmonologist</option>
+            <option value="Nephrologist">Nephrologist</option>
+            <option value="Urologist">Urologist</option>
+            <option value="Endocrinologist">Endocrinologist</option>
+            <option value="Rheumatologist">Rheumatologist</option>
+            <option value="Hematologist">Hematologist</option>
+            <option value="Infectious Disease Specialist">Infectious Disease Specialist</option>
+            <option value="Dermatologist">Dermatologist</option>
+            <option value="Ophthalmologist">Ophthalmologist</option>
+            <option value="Otolaryngologist (ENT Specialist)">Otolaryngologist (ENT Specialist)</option>
+            <option value="Psychiatrist">Psychiatrist</option>
+            <option value="Anesthesiologist">Anesthesiologist</option>
+            <option value="Radiologist">Radiologist</option>
+            <option value="Pathologist">Pathologist</option>
+            <option value="Emergency Medicine Physician">Emergency Medicine Physician</option>
+            <option value="Intensivist (Critical Care Physician)">Intensivist (Critical Care Physician)</option>
+            <option value="Plastic Surgeon">Plastic Surgeon</option>
+            <option value="Vascular Surgeon">Vascular Surgeon</option>
+            <option value="Transplant Surgeon">Transplant Surgeon</option>
+            <option value="Pediatric Surgeon">Pediatric Surgeon</option>
+            <option value="Geriatrician">Geriatrician</option>
+            <option value="Physiatrist (Physical Medicine & Rehabilitation)">Physiatrist (Physical Medicine & Rehabilitation)</option>
+            <option value="Pain Management Specialist">Pain Management Specialist</option>
+            <option value="Allergist/Immunologist">Allergist/Immunologist</option>
+            <option value="Neonatologist">Neonatologist</option>
+            <option value="Podiatrist">Podiatrist</option>
+            <option value="Oral and Maxillofacial Surgeon">Oral and Maxillofacial Surgeon</option>
+            <option value="Sports Medicine Physician">Sports Medicine Physician</option>
+            <option value="Sleep Medicine Specialist">Sleep Medicine Specialist</option>
+            <option value="Palliative Care Physician">Palliative Care Physician</option>
+            <option value="Medical Geneticist">Medical Geneticist</option>
+            <option value="Nuclear Medicine Physician">Nuclear Medicine Physician</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex-row">
+        <div class="form-group">
+          <label>Department ID</label>
+          <select id="doc-dept" required>
+            <option value="">Select Department...</option>
+            <option value="dept-general-medicine">General Medicine</option>
+            <option value="dept-general-surgery">General Surgery</option>
+            <option value="dept-internal-medicine">Internal Medicine</option>
+            <option value="dept-pediatrics">Pediatrics</option>
+            <option value="dept-obstetrics-gynecology">Obstetrics Gynecology</option>
+            <option value="dept-cardiology">Cardiology</option>
+            <option value="dept-cardiothoracic-surgery">Cardiothoracic Surgery</option>
+            <option value="dept-neurology">Neurology</option>
+            <option value="dept-neurosurgery">Neurosurgery</option>
+            <option value="dept-orthopedics">Orthopedics</option>
+            <option value="dept-oncology">Oncology</option>
+            <option value="dept-radiation-oncology">Radiation Oncology</option>
+            <option value="dept-gastroenterology">Gastroenterology</option>
+            <option value="dept-pulmonology">Pulmonology</option>
+            <option value="dept-nephrology">Nephrology</option>
+            <option value="dept-urology">Urology</option>
+            <option value="dept-endocrinology">Endocrinology</option>
+            <option value="dept-rheumatology">Rheumatology</option>
+            <option value="dept-hematology">Hematology</option>
+            <option value="dept-infectious-disease">Infectious Disease</option>
+            <option value="dept-dermatology">Dermatology</option>
+            <option value="dept-ophthalmology">Ophthalmology</option>
+            <option value="dept-otolaryngology">Otolaryngology</option>
+            <option value="dept-psychiatry">Psychiatry</option>
+            <option value="dept-anesthesiology">Anesthesiology</option>
+            <option value="dept-radiology">Radiology</option>
+            <option value="dept-pathology">Pathology</option>
+            <option value="dept-emergency-medicine">Emergency Medicine</option>
+            <option value="dept-critical-care">Critical Care</option>
+            <option value="dept-plastic-surgery">Plastic Surgery</option>
+            <option value="dept-vascular-surgery">Vascular Surgery</option>
+            <option value="dept-transplant-surgery">Transplant Surgery</option>
+            <option value="dept-pediatric-surgery">Pediatric Surgery</option>
+            <option value="dept-geriatrics">Geriatrics</option>
+            <option value="dept-physical-medicine-rehabilitation">Physical Medicine Rehabilitation</option>
+            <option value="dept-pain-management">Pain Management</option>
+            <option value="dept-allergy-immunology">Allergy Immunology</option>
+            <option value="dept-neonatology">Neonatology</option>
+            <option value="dept-podiatry">Podiatry</option>
+            <option value="dept-dentistry-oral-surgery">Dentistry Oral Surgery</option>
+            <option value="dept-sports-medicine">Sports Medicine</option>
+            <option value="dept-sleep-medicine">Sleep Medicine</option>
+            <option value="dept-palliative-care">Palliative Care</option>
+            <option value="dept-genetics">Genetics</option>
+            <option value="dept-pharmacy">Pharmacy</option>
+            <option value="dept-laboratory">Laboratory</option>
+            <option value="dept-blood-bank">Blood Bank</option>
+            <option value="dept-physical-therapy">Physical Therapy</option>
+            <option value="dept-occupational-therapy">Occupational Therapy</option>
+            <option value="dept-speech-therapy">Speech Therapy</option>
+            <option value="dept-nutrition-dietetics">Nutrition Dietetics</option>
+            <option value="dept-social-work">Social Work</option>
+            <option value="dept-nursing">Nursing</option>
+            <option value="dept-medical-records">Medical Records</option>
+            <option value="dept-admissions">Admissions</option>
+            <option value="dept-billing-finance">Billing Finance</option>
+            <option value="dept-infection-control">Infection Control</option>
+            <option value="dept-quality-assurance">Quality Assurance</option>
+            <option value="dept-chaplaincy">Chaplaincy</option>
+            <option value="dept-ct-imaging">Ct Imaging</option>
+            <option value="dept-mri-imaging">Mri Imaging</option>
+            <option value="dept-ultrasound">Ultrasound</option>
+            <option value="dept-nuclear-medicine">Nuclear Medicine</option>
+            <option value="dept-mammography">Mammography</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Consultation Fee (NGN)</label>
+          <input type="number" id="doc-fee" min="0" required>
+        </div>
+      </div>
+            <div class="form-group">
+        <label>Qualifications</label>
+        <div id="doc-qualifications-container" style="border: 1px solid #ccc; padding: 10px; border-radius: 4px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <label style="font-weight: normal; margin-bottom: 0; display: flex; align-items: center; cursor: pointer;"><input type="checkbox" value="MBBS"> MBBS</label>
+          <label style="font-weight: normal; margin-bottom: 0; display: flex; align-items: center; cursor: pointer;"><input type="checkbox" value="MD"> MD</label>
+          <label style="font-weight: normal; margin-bottom: 0; display: flex; align-items: center; cursor: pointer;"><input type="checkbox" value="FMCP"> FMCP</label>
+          <label style="font-weight: normal; margin-bottom: 0; display: flex; align-items: center; cursor: pointer;"><input type="checkbox" value="FMCGP"> FMCGP</label>
+          <label style="font-weight: normal; margin-bottom: 0; display: flex; align-items: center; cursor: pointer;"><input type="checkbox" value="FWACP"> FWACP</label>
+          <label style="font-weight: normal; margin-bottom: 0; display: flex; align-items: center; cursor: pointer;"><input type="checkbox" value="FRCS"> FRCS</label>
+          <label style="font-weight: normal; margin-bottom: 0; display: flex; align-items: center; cursor: pointer;"><input type="checkbox" value="PhD"> PhD</label>
+          <label style="font-weight: normal; margin-bottom: 0; display: flex; align-items: center; cursor: pointer;"><input type="checkbox" value="Fellowship"> Fellowship</label>
+        </div>
+      </div>
+            <div class="form-group">
+        <label>Profile Image (Auto-compressed to Base64)</label>
+        <input type="file" id="doc-image" accept="image/*">
+        <input type="hidden" id="doc-image-b64">
+        <img id="doc-image-preview" src="" style="display:none; margin-top:10px; max-height: 100px; border-radius:4px; border:1px solid #ccc;">
+      </div>
+      <div class="form-group">
+        <label>Bio</label>
+        <textarea id="doc-bio" rows="3" required></textarea>
+      </div>
+      <button type="submit">Create Doctor</button>
+    </form>
+
+    <h2>Manage Doctors</h2>
+    <div style="margin-bottom: 20px;">
+      <input type="text" id="search-doctor" placeholder="Search by name or specialty..." oninput="filterDoctors()">
+    </div>
+    <div id="doctors-list">
+      Loading...
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/v1';
+    let token = localStorage.getItem('admin_token');
+    let allDoctors = [];
+
+    // Init
+    if (token) {
+      showDashboard();
+    }
+
+    // Helpers
+    function showAlert(id, type, message) {
+      const el = document.getElementById(id);
+      el.className = `alert ${type}`;
+      el.innerText = message;
+      setTimeout(() => { el.className = 'alert hidden'; }, 5000);
+    }
+
+    async function apiRequest(path, options = {}) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      
+      const res = await fetch(`${API_BASE}${path}`, { ...options, headers: { ...headers, ...options.headers } });
+      if (res.status === 401 || res.status === 403) {
+        logout();
+        throw new Error('Unauthorized');
+      }
+      if (res.status === 204) return null;
+      
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || 'API Error');
+      return json.data;
+    }
+
+    function showDashboard() {
+      document.getElementById('login-section').classList.add('hidden');
+      document.getElementById('dashboard-section').classList.remove('hidden');
+      loadDoctors();
+    }
+
+        function logout() {
+      localStorage.removeItem('admin_token');
+      token = null;
+      document.getElementById('login-section').classList.remove('hidden');
+      document.getElementById('dashboard-section').classList.add('hidden');
+    }
+
+    function generatePassword() {
+      const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+      let password = "";
+      for (let i = 0; i < 12; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      document.getElementById('doc-password').value = password;
+    }
+    
+    // Call generatePassword when dashboard is shown
+    const originalShowDash = showDashboard;
+    showDashboard = function() {
+      originalShowDash();
+      generatePassword();
+    };
+
+
+    // Login
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const data = await apiRequest('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: document.getElementById('login-email').value,
+            password: document.getElementById('login-password').value
+          })
+        });
+        
+        token = data.token;
+        localStorage.setItem('admin_token', token);
+        showDashboard();
+      } catch (err) {
+        showAlert('login-alert', 'error', err.message);
+      }
+    });
+
+        // Image Compression & Base64
+    document.getElementById('doc-image').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) {
+        document.getElementById('doc-image-b64').value = '';
+        document.getElementById('doc-image-preview').style.display = 'none';
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const max_size = 300;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height && width > max_size) {
+            height *= max_size / width;
+            width = max_size;
+          } else if (height > max_size) {
+            width *= max_size / height;
+            height = max_size;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // compress to 0.7 quality JPEG
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          document.getElementById('doc-image-b64').value = dataUrl;
+          
+          const preview = document.getElementById('doc-image-preview');
+          preview.src = dataUrl;
+          preview.style.display = 'block';
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Create Doctor
+    document.getElementById('create-doctor-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        await apiRequest('/doctors', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: document.getElementById('doc-name').value,
+            email: document.getElementById('doc-email').value,
+            password: document.getElementById('doc-password').value,
+            specialty: document.getElementById('doc-specialty').value,
+            departmentId: document.getElementById('doc-dept').value,
+            consultationFee: parseInt(document.getElementById('doc-fee').value, 10),
+            qualifications: Array.from(document.querySelectorAll('#doc-qualifications-container input:checked')).map(cb => cb.value),
+            bio: document.getElementById('doc-bio').value,
+            imageUrl: document.getElementById('doc-image-b64').value || undefined,
+          })
+        });
+        showAlert('dash-alert', 'success', 'Doctor created successfully!');
+        e.target.reset(); generatePassword(); document.getElementById('doc-image-preview').style.display = 'none'; document.getElementById('doc-image-b64').value = '';
+        loadDoctors();
+      } catch (err) {
+        showAlert('dash-alert', 'error', err.message);
+      }
+    });
+
+    // Load Doctors
+    async function loadDoctors() {
+      try {
+        allDoctors = await apiRequest('/doctors?limit=100');
+        renderDoctors(allDoctors);
+      } catch (err) {
+        document.getElementById('doctors-list').innerText = 'Failed to load doctors.';
+      }
+    }
+
+    function filterDoctors() {
+      const q = document.getElementById('search-doctor').value.toLowerCase();
+      const filtered = allDoctors.filter(d => 
+        d.name.toLowerCase().includes(q) || d.specialty.toLowerCase().includes(q)
+      );
+      renderDoctors(filtered);
+    }
+
+    function renderDoctors(doctors) {
+      const list = document.getElementById('doctors-list');
+      list.innerHTML = '';
+      if (doctors.length === 0) {
+        list.innerText = 'No doctors found.';
+        return;
+      }
+      
+      doctors.forEach(doc => {
+        const div = document.createElement('div');
+        div.className = 'card';
+                div.innerHTML = `
+          <div style="display: flex; gap: 15px; align-items: center;">
+            <img src="${doc.imageUrl || 'https://via.placeholder.com/50'}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; background: #eee;">
+            <div>
+              <strong>${doc.name}</strong><br>
+              <small>${doc.specialty} • NGN ${doc.consultationFee}</small>
+            </div>
+          </div>
+          <button class="danger" onclick="deleteDoctor('${doc.id}')">Delete</button>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    // Delete Doctor
+    async function deleteDoctor(id) {
+      if (!confirm('Are you sure you want to soft-delete this doctor? All upcoming appointments will be cancelled.')) return;
+      
+      try {
+        await apiRequest(`/doctors/${id}`, { method: 'DELETE' });
+        showAlert('dash-alert', 'success', 'Doctor deleted successfully!');
+        loadDoctors();
+      } catch (err) {
+        showAlert('dash-alert', 'error', err.message);
+      }
+    }
+  </script>
+</body>
+</html>
+
