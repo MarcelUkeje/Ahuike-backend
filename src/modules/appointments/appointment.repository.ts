@@ -25,6 +25,7 @@ export interface AppointmentRepository {
   findById(id: string): Promise<Appointment | null>;
   findByIdempotencyKey(key: string): Promise<Appointment | null>;
   confirmPayment(id: string): Promise<void>;
+  complete(id: string): Promise<void>;
   delete(id: string): Promise<void>;
 }
 
@@ -144,6 +145,13 @@ export class NeonAppointmentRepository implements AppointmentRepository {
     await sql`INSERT INTO appointment_status_events (id, appointment_id, status, created_at) VALUES (${randomUUID()}, ${id}, 'confirmed', ${now})`;
   }
 
+  async complete(id: string): Promise<void> {
+    const sql = getDb();
+    const now = new Date().toISOString();
+    await sql`UPDATE appointments SET status = 'completed', updated_at = ${now} WHERE id = ${id}`;
+    await sql`INSERT INTO appointment_status_events (id, appointment_id, status, created_at) VALUES (${randomUUID()}, ${id}, 'completed', ${now})`;
+  }
+
   async delete(id: string): Promise<void> {
     const sql = getDb();
     await sql`DELETE FROM appointment_status_events WHERE appointment_id = ${id}`;
@@ -203,6 +211,15 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
     const appointment = this.store.get(id);
     if (appointment) {
       appointment.status = 'confirmed';
+      appointment.updatedAt = new Date().toISOString();
+      this.store.set(id, appointment);
+    }
+  }
+
+  async complete(id: string): Promise<void> {
+    const appointment = this.store.get(id);
+    if (appointment) {
+      appointment.status = 'completed';
       appointment.updatedAt = new Date().toISOString();
       this.store.set(id, appointment);
     }
