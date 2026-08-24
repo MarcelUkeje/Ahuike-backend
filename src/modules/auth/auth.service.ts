@@ -59,7 +59,7 @@ export class AuthService {
 
     // 4. Issue JWT token
     const tokens = this.generateTokens({ sub: user.id, email: user.email, role: user.role });
-    return { ...tokens, token: tokens.accessToken, patient };
+    return { ...tokens, token: tokens.accessToken, patient: { ...patient, email: user.email } };
   }
 
   async login(input: { email: string; password: string }) {
@@ -90,6 +90,6 @@ export class AuthService {
     // (Other roles like doctor, admin can be handled here later)
 
     const tokens = this.generateTokens({ sub: record.id, email: record.email, role: record.role });
-    return { ...tokens, token: tokens.accessToken, user: { id: record.id, email: record.email, role: record.role }, profile };
+    return { ...tokens, token: tokens.accessToken, user: { id: record.id, email: record.email, role: record.role }, patient: profile };
   }
 }
