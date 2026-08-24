@@ -1,6 +1,5 @@
 import dns from 'node:dns/promises';
 import nodemailer from 'nodemailer';
-import type { Transporter } from 'nodemailer';
 
 export interface SendEmailOptions {
   to: string;
@@ -9,7 +8,6 @@ export interface SendEmailOptions {
 }
 
 export class EmailService {
-  private transporter: Transporter;
   private defaultFrom: string;
 
   constructor() {
@@ -21,25 +19,9 @@ export class EmailService {
     }
 
     this.defaultFrom = `Ahuike Hospital <${user}>`;
-    
-    // We start with the standard host, but we will override it per-request
-    this.transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user,
-        pass,
-      },
-      tls: {
-        servername: 'smtp.gmail.com', // Required for SNI when connecting via raw IP
-        rejectUnauthorized: false
-      },
-      family: 4,
-    } as any);
   }
 
-  /** Send a generic email */
+    /** Send a generic email */
   async send(options: SendEmailOptions): Promise<void> {
     if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
       console.log(`[EmailService STUB] To: ${options.to} | Subject: ${options.subject}`);
@@ -47,13 +29,22 @@ export class EmailService {
     }
 
     try {
-      // 1. Manually resolve the IPv4 address to completely bypass Alpine/Render IPv6 bugs
       const lookupResult = await dns.lookup('smtp.gmail.com', { family: 4 });
-      
-      // 2. Override the host with the raw IPv4 address for this connection
-      (this.transporter.options as any).host = lookupResult.address;
 
-      const info = await this.transporter.sendMail({
+      const transporter = nodemailer.createTransport({
+        host: lookupResult.address,
+        port: 465,
+        secure: true,
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD,
+        },
+        tls: {
+          servername: 'smtp.gmail.com',
+        },
+      });
+
+      const info = await transporter.sendMail({
         from: this.defaultFrom,
         to: options.to,
         subject: options.subject,
