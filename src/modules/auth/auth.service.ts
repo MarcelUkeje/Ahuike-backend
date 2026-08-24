@@ -21,8 +21,8 @@ export class AuthService {
       if (existing.isVerified) {
         throw new HttpError(409, 'EMAIL_IN_USE', 'An account with this email already exists.');
       }
-      // If unverified, we can resend OTP but let's just delete the old unverified user for simplicity
-      await this.users.softDelete(existing.id);
+      // If unverified, we can resend OTP. We hard delete the old unverified user to prevent unique email constraint issues.
+      await this.users.hardDelete(existing.id);
     }
 
     const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);

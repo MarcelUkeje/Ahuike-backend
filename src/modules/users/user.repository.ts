@@ -14,6 +14,7 @@ export interface UserRepository {
   findById(id: string): Promise<User | null>;
   markVerified(id: string): Promise<void>;
   softDelete(id: string): Promise<void>;
+  hardDelete(id: string): Promise<void>;
 
   // OTP operations
   createOtp(userId: string, code: string, expiresAt: Date): Promise<void>;
@@ -70,6 +71,12 @@ export class NeonUserRepository implements UserRepository {
   async softDelete(id: string): Promise<void> {
     const sql = getDb();
     await sql`UPDATE users SET is_active = false, updated_at = now() WHERE id = ${id}`;
+  }
+
+  async hardDelete(id: string): Promise<void> {
+    const sql = getDb();
+    await sql`DELETE FROM otp_codes WHERE user_id = ${id}`;
+    await sql`DELETE FROM users WHERE id = ${id}`;
   }
 
   async createOtp(userId: string, code: string, expiresAt: Date): Promise<void> {
@@ -146,6 +153,15 @@ export class InMemoryUserRepository implements UserRepository {
     if (user) {
       user.isActive = false;
       user.updatedAt = new Date().toISOString();
+    }
+  }
+
+  async hardDelete(id: string): Promise<void> {
+    this.users.delete(id);
+    for (const [key, value] of this.otps.entries()) {
+      if (value.userId === id) {
+        this.otps.delete(key);
+      }
     }
   }
 

@@ -141,6 +141,22 @@ export async function buildApp(
   const userRepo    = hasDb ? new NeonUserRepository() : new InMemoryUserRepository();
   const emailService = new EmailService();
 
+  app.setNotFoundHandler((_request, reply) => {
+    void reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Route not found.' } });
+  });
+
+  app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof HttpError) {
+      return reply.code(error.statusCode).send({
+        error: { code: error.code, message: error.message, details: error.details },
+      });
+    }
+    app.log.error(error);
+    return reply.code(500).send({
+      error: { code: 'INTERNAL_SERVER_ERROR', message: 'An unexpected error occurred.' },
+    });
+  });
+
   // ── Routes ────────────────────────────────────────────────────────────────────
   await app.register(authRoutes(userRepo, patientRepo, emailService), { prefix: '/api/v1/auth' });
   await app.register(patientRoutes(patientRepo, userRepo),                   { prefix: '/api/v1/patients' });
@@ -218,21 +234,5 @@ export async function buildApp(
       app.log.error(err);
     }
   });
-  app.setNotFoundHandler((_request, reply) => {
-    void reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Route not found.' } });
-  });
-
-  app.setErrorHandler((error, _request, reply) => {
-    if (error instanceof HttpError) {
-      return reply.code(error.statusCode).send({
-        error: { code: error.code, message: error.message, details: error.details },
-      });
-    }
-    app.log.error(error);
-    return reply.code(500).send({
-      error: { code: 'INTERNAL_SERVER_ERROR', message: 'An unexpected error occurred.' },
-    });
-  });
-
   return app;
 }
