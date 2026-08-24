@@ -21,7 +21,7 @@ export class OTPService {
     
     await this.userRepository.createOtp(userId, code, expiresAt);
 
-    await this.emailService.send({
+    this.emailService.send({
       to: email,
       subject: 'Your Ahuike Verification Code',
       html: `
@@ -32,6 +32,8 @@ export class OTPService {
           <p>This code will expire in 15 minutes. If you did not request this, please ignore this email.</p>
         </div>
       `,
+    }).catch(err => {
+      console.error('[OTPService] Failed to send OTP email non-blocking:', err);
     });
   }
 

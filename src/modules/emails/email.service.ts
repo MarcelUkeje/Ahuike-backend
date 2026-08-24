@@ -21,6 +21,7 @@ export class EmailService {
 
     this.defaultFrom = `Ahuike Hospital <${user}>`;
     this.transporter = nodemailer.createTransport({
+      service: 'gmail',
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,

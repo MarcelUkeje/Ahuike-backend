@@ -1,3 +1,9 @@
+import 'dotenv/config';
+import dns from 'node:dns';
+
+// Force IPv4 resolution for outbound requests to prevent Render IPv6 issues
+dns.setDefaultResultOrder('ipv4first');
+
 import { buildApp } from './app.js';
 import { loadEnvironment } from './config/env.js';
 
